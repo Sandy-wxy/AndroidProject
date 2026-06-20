@@ -1,0 +1,14 @@
+package com.example.focus_flow.domain.rules;
+
+public enum EncouragementCategory {
+    FIRST_COMPLETE_TODAY,
+    SMOOTH_COMPLETE,
+    COMPLETED_WITH_PAUSE,
+    HARD_TASK_COMPLETE,
+    STREAK_COMPLETE,
+    LOW_QUALITY_COMPLETE,
+    ABANDONED_NEAR_END,
+    ABANDONED_HALF,
+    ABANDONED_EARLY,
+    EXTERNAL_INTERRUPTION
+}

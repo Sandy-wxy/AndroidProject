@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/homeFragment">
+
+    <fragment
+        android:id="@+id/homeFragment"
+        android:name="com.example.focus_flow.feature.home.HomeFragment"
+        android:label="@string/nav_home" />
+    <fragment
+        android:id="@+id/tasksFragment"
+        android:name="com.example.focus_flow.feature.tasks.TasksFragment"
+        android:label="@string/nav_tasks" />
+    <fragment
+        android:id="@+id/focusFragment"
+        android:name="com.example.focus_flow.feature.focus.FocusFragment"
+        android:label="@string/nav_focus" />
+    <fragment
+        android:id="@+id/noiseFragment"
+        android:name="com.example.focus_flow.feature.noise.NoiseFragment"
+        android:label="@string/nav_noise" />
+    <fragment
+        android:id="@+id/profileFragment"
+        android:name="com.example.focus_flow.feature.profile.ProfileFragment"
+        android:label="@string/nav_profile" />
+</navigation>

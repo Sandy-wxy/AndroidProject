@@ -1,0 +1,30 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Base.Theme.Focus_Flow" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">@color/glass_nav</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="colorPrimary">@color/focus_cyan</item>
+        <item name="colorSecondary">@color/focus_purple</item>
+        <item name="colorSurface">@color/surface_deep</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+
+    <style name="Theme.Focus_Flow" parent="Base.Theme.Focus_Flow" />
+
+    <style name="WidgetFocusFlowNavItem">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">match_parent</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:drawablePadding">1dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:paddingTop">4dp</item>
+        <item name="android:paddingBottom">3dp</item>
+        <item name="android:textColor">@color/nav_item_tint</item>
+        <item name="android:textSize">11sp</item>
+        <item name="drawableTint">@color/nav_item_tint</item>
+    </style>
+</resources>

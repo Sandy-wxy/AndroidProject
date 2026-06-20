@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="app_bg_start">#07101E</color>
+    <color name="app_bg_mid">#101728</color>
+    <color name="app_bg_end">#201B4A</color>
+    <color name="surface_deep">#111827</color>
+    <color name="glass_card">#DC1B2A3D</color>
+    <color name="glass_card_strong">#E624354B</color>
+    <color name="glass_nav">#F0162436</color>
+    <color name="glass_stroke">#747CA6C7</color>
+    <color name="aurora_cyan">#8614B8C8</color>
+    <color name="aurora_purple">#805A45B8</color>
+    <color name="aurora_mint">#6622C58A</color>
+    <color name="frost_speck">#26FFFFFF</color>
+    <color name="text_primary">#F9FAFB</color>
+    <color name="text_secondary">#CBD5E1</color>
+    <color name="text_weak">#94A3B8</color>
+    <color name="focus_cyan">#22D3EE</color>
+    <color name="focus_cyan_soft">#3322D3EE</color>
+    <color name="focus_purple">#A78BFA</color>
+    <color name="focus_blue">#60A5FA</color>
+    <color name="focus_green">#34D399</color>
+    <color name="focus_orange">#F59E0B</color>
+    <color name="focus_pink">#F472B6</color>
+    <color name="nav_unselected">#94A3B8</color>
+</resources>

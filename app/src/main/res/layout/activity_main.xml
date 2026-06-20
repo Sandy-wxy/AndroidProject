@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.example.focus_flow.core.ui.AuroraCoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity">
+
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/nav_host_fragment_content_main"
+        android:name="androidx.navigation.fragment.NavHostFragment"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginBottom="76dp"
+        app:defaultNavHost="true"
+        app:navGraph="@navigation/nav_graph" />
+
+    <LinearLayout
+        android:id="@+id/bottom_nav"
+        android:layout_width="match_parent"
+        android:layout_height="76dp"
+        android:layout_gravity="bottom"
+        android:background="@drawable/bg_bottom_nav_glass"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp">
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/nav_home"
+            style="@style/WidgetFocusFlowNavItem"
+            android:drawableTop="@drawable/ic_nav_home"
+            android:text="@string/nav_home" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/nav_focus"
+            style="@style/WidgetFocusFlowNavItem"
+            android:drawableTop="@drawable/ic_nav_focus"
+            android:text="@string/nav_focus" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/nav_profile"
+            style="@style/WidgetFocusFlowNavItem"
+            android:drawableTop="@drawable/ic_nav_profile"
+            android:text="@string/nav_profile" />
+    </LinearLayout>
+
+</com.example.focus_flow.core.ui.AuroraCoordinatorLayout>

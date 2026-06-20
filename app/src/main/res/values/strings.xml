@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">Focus_Flow</string>
+    <string name="nav_home">首页</string>
+    <string name="nav_tasks">任务</string>
+    <string name="nav_focus">专注</string>
+    <string name="nav_noise">白噪音</string>
+    <string name="nav_stats">统计</string>
+    <string name="nav_profile">我的</string>
+    <string name="shell_stage_message">工程底座已接入，功能模块将按阶段展开。</string>
+</resources>

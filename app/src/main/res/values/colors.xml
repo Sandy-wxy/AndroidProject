@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="app_bg_start">#F6FBFF</color>
+    <color name="app_bg_mid">#EAF8FF</color>
+    <color name="app_bg_end">#F4EEFF</color>
+    <color name="surface_deep">#F9FCFF</color>
+    <color name="glass_card">#F2FFFFFF</color>
+    <color name="glass_card_strong">#FAFFFFFF</color>
+    <color name="glass_nav">#F6FFFFFF</color>
+    <color name="glass_stroke">#A9B7C7E8</color>
+    <color name="aurora_cyan">#6A9DF4FF</color>
+    <color name="aurora_purple">#5BB9A7FF</color>
+    <color name="aurora_mint">#55B3F6D8</color>
+    <color name="frost_speck">#2BFFFFFF</color>
+    <color name="text_primary">#111827</color>
+    <color name="text_secondary">#475569</color>
+    <color name="text_weak">#64748B</color>
+    <color name="focus_cyan">#0891B2</color>
+    <color name="focus_cyan_soft">#CCECFEFF</color>
+    <color name="focus_purple">#7C3AED</color>
+    <color name="focus_blue">#2563EB</color>
+    <color name="focus_green">#059669</color>
+    <color name="focus_orange">#D97706</color>
+    <color name="focus_pink">#DB2777</color>
+    <color name="nav_unselected">#64748B</color>
+</resources>
