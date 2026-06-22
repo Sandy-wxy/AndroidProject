@@ -1,10 +1,12 @@
 <resources>
-    <string name="app_name">Focus_Flow</string>
+    <string name="app_name">番茄Focus</string>
     <string name="nav_home">首页</string>
     <string name="nav_tasks">任务</string>
     <string name="nav_focus">专注</string>
     <string name="nav_noise">白噪音</string>
     <string name="nav_stats">统计</string>
     <string name="nav_profile">我的</string>
+    <string name="nav_forest">种树</string>
     <string name="shell_stage_message">工程底座已接入，功能模块将按阶段展开。</string>
+    <string name="widget_description">查看今日进度并快速开始专注</string>
 </resources>

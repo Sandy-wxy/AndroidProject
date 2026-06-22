@@ -119,6 +119,10 @@ public class TaskRepository {
         return taskLocalDataSource.getTasksForDate(plannedDate);
     }
 
+    public List<TaskRecord> getActiveTasks() {
+        return taskLocalDataSource.getActiveTasks();
+    }
+
     public List<FocusBlockRecord> getBlocksByTaskId(long taskId) {
         return focusBlockLocalDataSource.getBlocksByTaskId(taskId);
     }

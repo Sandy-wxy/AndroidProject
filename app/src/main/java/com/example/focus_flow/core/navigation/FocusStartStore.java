@@ -6,6 +6,7 @@ import android.content.SharedPreferences;
 public class FocusStartStore {
     private static final String PREFS = "focus_flow_focus_start";
     private static final String KEY_PENDING_TASK_ID = "pending_task_id";
+    private static final String KEY_PENDING_MINUTES = "pending_minutes";
 
     private final SharedPreferences preferences;
 
@@ -14,7 +15,14 @@ public class FocusStartStore {
     }
 
     public void requestStart(long taskId) {
-        preferences.edit().putLong(KEY_PENDING_TASK_ID, taskId).apply();
+        requestStart(taskId, -1);
+    }
+
+    public void requestStart(long taskId, int minutes) {
+        preferences.edit()
+                .putLong(KEY_PENDING_TASK_ID, taskId)
+                .putInt(KEY_PENDING_MINUTES, minutes)
+                .apply();
     }
 
     public long consumePendingTaskId() {
@@ -23,5 +31,11 @@ public class FocusStartStore {
             preferences.edit().remove(KEY_PENDING_TASK_ID).apply();
         }
         return taskId;
+    }
+
+    public int consumePendingMinutes() {
+        int minutes = preferences.getInt(KEY_PENDING_MINUTES, -1);
+        preferences.edit().remove(KEY_PENDING_MINUTES).apply();
+        return minutes;
     }
 }

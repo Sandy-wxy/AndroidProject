@@ -1,6 +1,7 @@
 package com.example.focus_flow.feature.profile;
 
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.LayoutInflater;
@@ -8,6 +9,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -15,6 +18,8 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.fragment.app.Fragment;
 
 import com.example.focus_flow.R;
@@ -60,6 +65,22 @@ public class ProfileFragment extends Fragment {
     private Map<Long, ContributionHeatmapView.DayContribution> contributions = Collections.emptyMap();
     private long heatmapStart;
     private long heatmapEnd;
+    private ActivityResultLauncher<String[]> avatarPicker;
+
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        avatarPicker = registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
+            if (uri == null) return;
+            try {
+                requireContext().getContentResolver().takePersistableUriPermission(
+                        uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            } catch (SecurityException ignored) {
+            }
+            account.setAvatarUri(uri.toString());
+            render();
+        });
+    }
 
     @Nullable
     @Override
@@ -160,19 +181,17 @@ public class ProfileFragment extends Fragment {
 
     private void addProfileHeader() {
         MaterialCardView card = TaskUi.glassCard(requireContext());
+        card.setId(R.id.profile_card_identity);
+        card.setClickable(true);
+        card.setFocusable(true);
         LinearLayout body = TaskUi.vertical(requireContext(), 20);
         card.addView(body);
 
         LinearLayout header = TaskUi.horizontal(requireContext());
-        TextView avatar = TaskUi.text(requireContext(), avatarText(), 24,
-                requireContext().getColor(android.R.color.white), android.graphics.Typeface.BOLD);
-        avatar.setGravity(android.view.Gravity.CENTER);
-        android.graphics.drawable.GradientDrawable avatarBackground = new android.graphics.drawable.GradientDrawable();
-        avatarBackground.setShape(android.graphics.drawable.GradientDrawable.OVAL);
-        avatarBackground.setColor(requireContext().getColor(R.color.focus_cyan));
-        avatar.setBackground(avatarBackground);
-        header.addView(avatar, new LinearLayout.LayoutParams(
-                TaskUi.dp(requireContext(), 64), TaskUi.dp(requireContext(), 64)));
+        FrameLayout avatarBox = avatarView();
+        avatarBox.setOnClickListener(v -> avatarPicker.launch(new String[]{"image/*"}));
+        header.addView(avatarBox, new LinearLayout.LayoutParams(
+                TaskUi.dp(requireContext(), 72), TaskUi.dp(requireContext(), 72)));
 
         LinearLayout identity = TaskUi.vertical(requireContext(), 0);
         identity.addView(TaskUi.text(requireContext(), account.name(), 27,
@@ -186,16 +205,101 @@ public class ProfileFragment extends Fragment {
         identityParams.setMarginStart(TaskUi.dp(requireContext(), 14));
         header.addView(identity, identityParams);
 
-        MaterialButton settings = TaskUi.button(requireContext(), "设置", false);
-        settings.setOnClickListener(v -> startActivity(new Intent(requireContext(), SettingsActivity.class)));
-        header.addView(settings);
+        MaterialButton edit = TaskUi.button(requireContext(), "编辑资料", false);
+        edit.setId(R.id.profile_button_edit);
+        edit.setOnClickListener(v -> showProfileEditor());
+        header.addView(edit);
         body.addView(header);
         body.addView(TaskUi.spacer(requireContext(), 12));
         body.addView(TaskUi.text(requireContext(),
                 "过去一年 " + activeDayCount() + " 个活跃日 · 当前连续 " + currentStreak() + " 天",
                 14, requireContext().getColor(R.color.text_secondary), android.graphics.Typeface.BOLD));
         content.addView(card);
+        card.setOnClickListener(v -> showProfileEditor());
         content.addView(TaskUi.spacer(requireContext(), 10));
+    }
+
+    private FrameLayout avatarView() {
+        FrameLayout box = new FrameLayout(requireContext());
+        android.graphics.drawable.GradientDrawable background = new android.graphics.drawable.GradientDrawable();
+        background.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        background.setColor(requireContext().getColor(R.color.focus_cyan));
+        String avatarUri = account.avatarUri();
+        if (avatarUri != null && !avatarUri.isEmpty()) {
+            ImageView image = new ImageView(requireContext());
+            image.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            image.setBackground(background);
+            image.setClipToOutline(true);
+            try {
+                image.setImageURI(Uri.parse(avatarUri));
+            } catch (RuntimeException ignored) {
+                account.setAvatarUri("");
+            }
+            box.addView(image, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        } else {
+            TextView initials = TaskUi.text(requireContext(), avatarText(), 25,
+                    requireContext().getColor(android.R.color.white), android.graphics.Typeface.BOLD);
+            initials.setGravity(android.view.Gravity.CENTER);
+            initials.setBackground(background);
+            box.addView(initials, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        }
+        TextView camera = TaskUi.text(requireContext(), "✎", 12,
+                requireContext().getColor(android.R.color.white), android.graphics.Typeface.BOLD);
+        camera.setGravity(android.view.Gravity.CENTER);
+        android.graphics.drawable.GradientDrawable badge = new android.graphics.drawable.GradientDrawable();
+        badge.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        badge.setColor(requireContext().getColor(R.color.focus_purple));
+        camera.setBackground(badge);
+        FrameLayout.LayoutParams badgeParams = new FrameLayout.LayoutParams(
+                TaskUi.dp(requireContext(), 25), TaskUi.dp(requireContext(), 25),
+                android.view.Gravity.END | android.view.Gravity.BOTTOM);
+        box.addView(camera, badgeParams);
+        return box;
+    }
+
+    private void showProfileEditor() {
+        LinearLayout form = TaskUi.vertical(requireContext(), 18);
+        form.addView(TaskUi.text(requireContext(), "编辑个人资料", 22,
+                requireContext().getColor(R.color.text_primary), android.graphics.Typeface.BOLD));
+        EditText name = input("昵称", InputType.TYPE_CLASS_TEXT);
+        name.setText(account.name());
+        name.setId(R.id.profile_edit_name);
+        EditText email = input("邮箱",
+                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        email.setText(account.email());
+        email.setId(R.id.profile_edit_email);
+        MaterialButton avatar = TaskUi.button(requireContext(), "更换头像", false);
+        avatar.setId(R.id.profile_button_change_avatar);
+        avatar.setOnClickListener(v -> avatarPicker.launch(new String[]{"image/*"}));
+        form.addView(name);
+        form.addView(email);
+        form.addView(avatar);
+
+        androidx.appcompat.app.AlertDialog dialog = new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setView(form)
+                .setNegativeButton("取消", null)
+                .setPositiveButton("保存", null)
+                .create();
+        dialog.setOnShowListener(ignored ->
+                dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                    String nameText = name.getText().toString().trim();
+                    String emailText = email.getText().toString().trim();
+                    if (nameText.isEmpty()) {
+                        name.setError("昵称不能为空");
+                        return;
+                    }
+                    if (!android.util.Patterns.EMAIL_ADDRESS.matcher(emailText).matches()) {
+                        email.setError("请输入有效邮箱");
+                        return;
+                    }
+                    account.updateProfile(nameText, emailText);
+                    Toast.makeText(requireContext(), "个人资料已更新", Toast.LENGTH_SHORT).show();
+                    dialog.dismiss();
+                    render();
+                }));
+        dialog.show();
     }
 
     private void addOverviewMetrics() {
@@ -327,6 +431,22 @@ public class ProfileFragment extends Fragment {
     }
 
     private void addAccountActions() {
+        MaterialCardView appearanceCard = TaskUi.glassCard(requireContext());
+        LinearLayout appearanceBody = TaskUi.vertical(requireContext(), 16);
+        appearanceCard.addView(appearanceBody);
+        appearanceBody.addView(TaskUi.text(requireContext(), "个性化", 20,
+                requireContext().getColor(R.color.text_primary), android.graphics.Typeface.BOLD));
+        appearanceBody.addView(TaskUi.text(requireContext(),
+                "选择喜欢的桌面图标，让 Focus Flow 更符合你的风格。",
+                13, requireContext().getColor(R.color.text_secondary),
+                android.graphics.Typeface.NORMAL));
+        MaterialButton iconButton = TaskUi.button(requireContext(),
+                "应用图标 · " + selectedIconTitle(), false);
+        iconButton.setId(R.id.profile_button_app_icon);
+        iconButton.setOnClickListener(v -> showIconPicker());
+        appearanceBody.addView(iconButton);
+        content.addView(appearanceCard);
+
         MaterialButton logout = TaskUi.button(requireContext(), "退出登录", false);
         logout.setId(R.id.profile_button_logout);
         logout.setOnClickListener(v -> {
@@ -335,6 +455,79 @@ public class ProfileFragment extends Fragment {
         });
         content.addView(TaskUi.spacer(requireContext(), 12));
         content.addView(logout);
+    }
+
+    private String selectedIconTitle() {
+        String selected = LauncherIconManager.selectedStyle(requireContext());
+        for (LauncherIconManager.IconStyle style : LauncherIconManager.STYLES) {
+            if (style.key.equals(selected)) {
+                return style.title;
+            }
+        }
+        return LauncherIconManager.STYLES[0].title;
+    }
+
+    private void showIconPicker() {
+        LinearLayout list = TaskUi.vertical(requireContext(), 14);
+        list.addView(TaskUi.text(requireContext(), "选择应用图标", 22,
+                requireContext().getColor(R.color.text_primary), android.graphics.Typeface.BOLD));
+        list.addView(TaskUi.text(requireContext(),
+                "桌面图标通常会在几秒内更新，具体时间取决于系统启动器。",
+                13, requireContext().getColor(R.color.text_secondary),
+                android.graphics.Typeface.NORMAL));
+
+        String current = LauncherIconManager.selectedStyle(requireContext());
+        androidx.appcompat.app.AlertDialog dialog =
+                new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                        .setView(list)
+                        .setNegativeButton("取消", null)
+                        .create();
+
+        for (LauncherIconManager.IconStyle style : LauncherIconManager.STYLES) {
+            MaterialCardView card = TaskUi.glassCard(requireContext());
+            card.setClickable(true);
+            card.setFocusable(true);
+            card.setStrokeWidth(TaskUi.dp(requireContext(),
+                    style.key.equals(current) ? 2 : 1));
+            card.setStrokeColor(requireContext().getColor(
+                    style.key.equals(current) ? R.color.focus_purple : R.color.glass_stroke));
+
+            LinearLayout row = TaskUi.horizontal(requireContext());
+            row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            ImageView preview = new ImageView(requireContext());
+            preview.setImageResource(style.iconRes);
+            row.addView(preview, new LinearLayout.LayoutParams(
+                    TaskUi.dp(requireContext(), 58), TaskUi.dp(requireContext(), 58)));
+
+            LinearLayout labels = TaskUi.vertical(requireContext(), 0);
+            labels.addView(TaskUi.text(requireContext(), style.title, 17,
+                    requireContext().getColor(R.color.text_primary),
+                    android.graphics.Typeface.BOLD));
+            labels.addView(TaskUi.text(requireContext(), style.description, 12,
+                    requireContext().getColor(R.color.text_secondary),
+                    android.graphics.Typeface.NORMAL));
+            LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
+            labelParams.setMarginStart(TaskUi.dp(requireContext(), 14));
+            row.addView(labels, labelParams);
+
+            TextView selectedMark = TaskUi.text(requireContext(),
+                    style.key.equals(current) ? "✓" : "›", 20,
+                    requireContext().getColor(style.key.equals(current)
+                            ? R.color.focus_purple : R.color.text_weak),
+                    android.graphics.Typeface.BOLD);
+            row.addView(selectedMark);
+            card.addView(row);
+            card.setOnClickListener(v -> {
+                LauncherIconManager.apply(requireContext(), style);
+                Toast.makeText(requireContext(),
+                        "已切换为“" + style.title + "”", Toast.LENGTH_SHORT).show();
+                dialog.dismiss();
+                render();
+            });
+            list.addView(card);
+        }
+        dialog.show();
     }
 
     private void prepareContributionData() {

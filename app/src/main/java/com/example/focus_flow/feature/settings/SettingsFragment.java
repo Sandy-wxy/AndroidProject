@@ -10,11 +10,14 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.Spinner;
+import android.widget.TextView;
 import android.widget.Toast;
+import android.text.InputType;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -28,6 +31,8 @@ import com.example.focus_flow.core.ui.ThemeApplier;
 import com.example.focus_flow.data.repository.RepositoryProvider;
 import com.example.focus_flow.feature.tasks.TaskUi;
 import com.example.focus_flow.feature.reminder.TaskReminderScheduler;
+import com.example.focus_flow.feature.sync.CloudSyncManager;
+import com.example.focus_flow.feature.sync.CloudSyncPreferences;
 import com.example.focus_flow.service.focus.FocusTimerService;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
@@ -56,6 +61,7 @@ public class SettingsFragment extends Fragment {
         content.addView(TaskUi.spacer(requireContext(), 16));
         addAppearanceCard();
         addNoiseCard();
+        addCloudSyncCard();
         addDataCard();
         addAboutCard();
     }
@@ -93,6 +99,16 @@ public class SettingsFragment extends Fragment {
                 new String[]{"跟随系统", "浅色", "深色"}));
         theme.setSelection(positionForTheme(provider.settingsRepository.getThemeMode()));
         body.addView(theme);
+        SwitchMaterial forestTab = new SwitchMaterial(requireContext());
+        forestTab.setId(R.id.settings_forest_tab_switch);
+        forestTab.setText("显示“种树”Tab");
+        forestTab.setTextColor(requireContext().getColor(R.color.text_primary));
+        forestTab.setChecked(provider.settingsRepository.isForestTabEnabled());
+        body.addView(forestTab);
+        body.addView(TaskUi.text(requireContext(),
+                "关闭后底部导航将隐藏种树栏目，已获得的树木不会丢失。",
+                12, requireContext().getColor(R.color.text_weak),
+                android.graphics.Typeface.NORMAL));
         MaterialButton apply = TaskUi.button(requireContext(), "应用主题", true);
         body.addView(apply);
         content.addView(card);
@@ -102,6 +118,12 @@ public class SettingsFragment extends Fragment {
             provider.settingsRepository.setThemeMode(mode);
             ThemeApplier.apply(mode);
             Toast.makeText(requireContext(), "主题已应用", Toast.LENGTH_SHORT).show();
+        });
+        forestTab.setOnCheckedChangeListener((buttonView, enabled) -> {
+            provider.settingsRepository.setForestTabEnabled(enabled);
+            Toast.makeText(requireContext(),
+                    enabled ? "已显示种树 Tab" : "已隐藏种树 Tab",
+                    Toast.LENGTH_SHORT).show();
         });
     }
 
@@ -150,7 +172,7 @@ public class SettingsFragment extends Fragment {
         card.addView(body);
         body.addView(TaskUi.text(requireContext(), "本地数据", 18,
                 requireContext().getColor(R.color.text_primary), android.graphics.Typeface.BOLD));
-        body.addView(TaskUi.text(requireContext(), "任务、番茄钟和统计只保存在本机 SQLite 中。", 14,
+        body.addView(TaskUi.text(requireContext(), "任务、番茄钟和统计默认保存在本机 SQLite 中，可按需同步到云端。", 14,
                 requireContext().getColor(R.color.text_secondary), android.graphics.Typeface.NORMAL));
         MaterialButton clear = TaskUi.button(requireContext(), "清空任务和专注记录", false);
         clear.setId(R.id.settings_clear_data_button);
@@ -173,13 +195,157 @@ public class SettingsFragment extends Fragment {
                 .show());
     }
 
+    private void addCloudSyncCard() {
+        CloudSyncPreferences cloudPreferences = new CloudSyncPreferences(requireContext());
+        CloudSyncManager cloudSync = new CloudSyncManager(requireContext());
+
+        MaterialCardView card = TaskUi.glassCard(requireContext());
+        LinearLayout body = TaskUi.vertical(requireContext(), 18);
+        card.addView(body);
+        body.addView(TaskUi.text(requireContext(), "云备份与多端同步", 18,
+                requireContext().getColor(R.color.text_primary), android.graphics.Typeface.BOLD));
+        body.addView(TaskUi.text(requireContext(),
+                "支持 HTTPS/WebDAV。多台设备填写相同配置后，可同步任务、专注记录、森林和个人资料。",
+                13, requireContext().getColor(R.color.text_secondary),
+                android.graphics.Typeface.NORMAL));
+
+        EditText url = cloudInput("云端文件地址（https://…/tomato-focus.json）",
+                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        url.setId(R.id.settings_cloud_url);
+        url.setText(cloudPreferences.url());
+        EditText username = cloudInput("云端账号", InputType.TYPE_CLASS_TEXT);
+        username.setId(R.id.settings_cloud_username);
+        username.setText(cloudPreferences.username());
+        EditText password = cloudInput("应用密码",
+                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        password.setId(R.id.settings_cloud_password);
+        password.setTransformationMethod(
+                android.text.method.PasswordTransformationMethod.getInstance());
+        password.setText(cloudPreferences.password());
+        body.addView(url);
+        body.addView(username);
+        body.addView(password);
+
+        SwitchMaterial autoSync = new SwitchMaterial(requireContext());
+        autoSync.setId(R.id.settings_cloud_auto_sync);
+        autoSync.setText("启动 App 时自动同步");
+        autoSync.setTextColor(requireContext().getColor(R.color.text_primary));
+        autoSync.setChecked(cloudPreferences.autoSync());
+        body.addView(autoSync);
+
+        TextView status = TaskUi.text(requireContext(),
+                cloudPreferences.lastSyncAt() == 0
+                        ? "尚未同步" : "最近同步：" + new java.text.SimpleDateFormat(
+                                "yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
+                                .format(new java.util.Date(cloudPreferences.lastSyncAt())),
+                12, requireContext().getColor(R.color.text_weak),
+                android.graphics.Typeface.NORMAL);
+        body.addView(status);
+
+        MaterialButton save = TaskUi.button(requireContext(), "保存云端配置", false);
+        save.setId(R.id.settings_cloud_save);
+        MaterialButton sync = TaskUi.button(requireContext(), "立即同步", true);
+        sync.setId(R.id.settings_cloud_sync);
+        MaterialButton backup = TaskUi.button(requireContext(), "仅备份本机到云端", false);
+        backup.setId(R.id.settings_cloud_backup);
+        MaterialButton restore = TaskUi.button(requireContext(), "从云端覆盖恢复", false);
+        restore.setId(R.id.settings_cloud_restore);
+        body.addView(save);
+        body.addView(sync);
+        body.addView(backup);
+        body.addView(restore);
+        body.addView(TaskUi.text(requireContext(),
+                "同步采用较新数据优先；“覆盖恢复”会替换本机学习数据。账号和密码使用系统密钥加密保存。",
+                12, requireContext().getColor(R.color.text_weak),
+                android.graphics.Typeface.NORMAL));
+        content.addView(card);
+
+        save.setOnClickListener(v -> {
+            String urlText = url.getText().toString().trim();
+            String userText = username.getText().toString().trim();
+            String passwordText = password.getText().toString();
+            if (!urlText.startsWith("https://")) {
+                url.setError("仅支持 HTTPS 地址");
+                return;
+            }
+            if (userText.isEmpty()) {
+                username.setError("请输入云端账号");
+                return;
+            }
+            if (passwordText.isEmpty()) {
+                password.setError("请输入应用密码");
+                return;
+            }
+            try {
+                cloudPreferences.save(urlText, userText, passwordText, autoSync.isChecked());
+                Toast.makeText(requireContext(), "云端配置已安全保存", Toast.LENGTH_SHORT).show();
+            } catch (IllegalStateException error) {
+                Toast.makeText(requireContext(), error.getMessage(), Toast.LENGTH_LONG).show();
+            }
+        });
+
+        CloudSyncManager.Callback callback = new CloudSyncManager.Callback() {
+            @Override
+            public void onSuccess(String message) {
+                setCloudControlsEnabled(true, save, sync, backup, restore);
+                status.setText(message + " · "
+                        + new java.text.SimpleDateFormat("MM-dd HH:mm",
+                        java.util.Locale.getDefault()).format(new java.util.Date()));
+                Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onError(String message) {
+                setCloudControlsEnabled(true, save, sync, backup, restore);
+                status.setText("同步失败：" + message);
+                Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
+            }
+        };
+        sync.setOnClickListener(v -> {
+            setCloudControlsEnabled(false, save, sync, backup, restore);
+            status.setText("正在比较云端与本机数据…");
+            cloudSync.sync(callback);
+        });
+        backup.setOnClickListener(v -> {
+            setCloudControlsEnabled(false, save, sync, backup, restore);
+            status.setText("正在上传云端备份…");
+            cloudSync.backup(callback);
+        });
+        restore.setOnClickListener(v -> new AlertDialog.Builder(requireContext())
+                .setTitle("从云端覆盖恢复")
+                .setMessage("本机任务、专注记录和森林数据将被云端备份替换。确定继续吗？")
+                .setNegativeButton("取消", null)
+                .setPositiveButton("确认恢复", (dialog, which) -> {
+                    setCloudControlsEnabled(false, save, sync, backup, restore);
+                    status.setText("正在下载并恢复云端数据…");
+                    cloudSync.restore(callback);
+                })
+                .show());
+    }
+
+    private EditText cloudInput(String hint, int inputType) {
+        EditText input = new EditText(requireContext());
+        input.setHint(hint);
+        input.setInputType(inputType);
+        input.setSingleLine(true);
+        input.setTextColor(requireContext().getColor(R.color.text_primary));
+        input.setHintTextColor(requireContext().getColor(R.color.text_weak));
+        return input;
+    }
+
+    private void setCloudControlsEnabled(boolean enabled, MaterialButton... buttons) {
+        for (MaterialButton button : buttons) {
+            button.setEnabled(enabled);
+        }
+    }
+
     private void addAboutCard() {
         MaterialCardView card = TaskUi.glassCard(requireContext());
         LinearLayout body = TaskUi.vertical(requireContext(), 18);
         card.addView(body);
-        body.addView(TaskUi.text(requireContext(), "Focus_Flow", 18,
+        body.addView(TaskUi.text(requireContext(), "番茄Focus", 18,
                 requireContext().getColor(R.color.text_primary), android.graphics.Typeface.BOLD));
-        body.addView(TaskUi.text(requireContext(), "本地规则驱动的离线专注工具。账户与学习记录仅保存在本机，不进行云同步。", 14,
+        body.addView(TaskUi.text(requireContext(), "专注、任务、森林与可选云同步一体化的学习工具。", 14,
                 requireContext().getColor(R.color.text_secondary), android.graphics.Typeface.NORMAL));
         content.addView(card);
     }

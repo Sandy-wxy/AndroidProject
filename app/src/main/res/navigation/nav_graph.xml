@@ -17,6 +17,10 @@
         android:name="com.example.focus_flow.feature.focus.FocusFragment"
         android:label="@string/nav_focus" />
     <fragment
+        android:id="@+id/forestFragment"
+        android:name="com.example.focus_flow.feature.forest.ForestFragment"
+        android:label="@string/nav_forest" />
+    <fragment
         android:id="@+id/noiseFragment"
         android:name="com.example.focus_flow.feature.noise.NoiseFragment"
         android:label="@string/nav_noise" />

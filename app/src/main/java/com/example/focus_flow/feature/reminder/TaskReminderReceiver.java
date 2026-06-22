@@ -14,9 +14,14 @@ import android.os.Build;
 import androidx.core.app.NotificationCompat;
 
 import com.example.focus_flow.R;
+import com.example.focus_flow.MainActivity;
+import com.example.focus_flow.core.navigation.FocusStartStore;
 
 public class TaskReminderReceiver extends BroadcastReceiver {
     public static final String ACTION_RING = "com.example.focus_flow.action.TASK_REMINDER";
+    public static final String ACTION_SNOOZE = "com.example.focus_flow.action.TASK_REMINDER_SNOOZE";
+    public static final String ACTION_CLOSE = "com.example.focus_flow.action.TASK_REMINDER_CLOSE";
+    public static final String ACTION_START = "com.example.focus_flow.action.TASK_REMINDER_START";
     public static final String EXTRA_TASK_ID = "task_id";
     public static final String EXTRA_TASK_TITLE = "task_title";
     public static final String CHANNEL_ID = "task_alarm_channel";
@@ -28,10 +33,30 @@ public class TaskReminderReceiver extends BroadcastReceiver {
             return;
         }
         String title = intent.getStringExtra(EXTRA_TASK_TITLE);
+        if (title == null) title = TaskReminderScheduler.getTitle(context, taskId);
+        if (ACTION_START.equals(intent.getAction())) {
+            cancelNotification(context, taskId);
+            new FocusStartStore(context).requestStart(taskId);
+            Intent main = new Intent(context, MainActivity.class)
+                    .putExtra(MainActivity.EXTRA_OPEN_FOCUS, true)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            context.startActivity(main);
+            return;
+        }
+        if (ACTION_SNOOZE.equals(intent.getAction())) {
+            TaskReminderScheduler.snooze(context, taskId, title);
+            cancelNotification(context, taskId);
+            return;
+        }
+        if (ACTION_CLOSE.equals(intent.getAction())) {
+            TaskReminderScheduler.cancel(context, taskId);
+            cancelNotification(context, taskId);
+            return;
+        }
         if (title == null || title.trim().isEmpty()) {
             title = "学习任务";
         }
-        TaskReminderScheduler.cancel(context, taskId);
+        TaskReminderScheduler.onAlarmTriggered(context, taskId, title);
         createChannel(context);
 
         Intent alarmIntent = new Intent(context, TaskAlarmActivity.class)
@@ -45,7 +70,15 @@ public class TaskReminderReceiver extends BroadcastReceiver {
                 (int) taskId,
                 alarmIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-
+        PendingIntent start = actionIntent(context, taskId, title, ACTION_START, 1);
+        PendingIntent snooze = actionIntent(context, taskId, title, ACTION_SNOOZE, 2);
+        PendingIntent close = actionIntent(context, taskId, title, ACTION_CLOSE, 3);
+        NotificationCompat.Action startAction = new NotificationCompat.Action(
+                R.drawable.ic_nav_focus, "开始", start);
+        NotificationCompat.Action snoozeAction = new NotificationCompat.Action(
+                R.drawable.ic_nav_focus, "稍后", snooze);
+        NotificationCompat.Action closeAction = new NotificationCompat.Action(
+                R.drawable.ic_nav_focus, "关闭", close);
         Notification notification = new NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_nav_focus)
                 .setContentTitle("任务提醒")
@@ -57,6 +90,13 @@ public class TaskReminderReceiver extends BroadcastReceiver {
                 .setAutoCancel(false)
                 .setContentIntent(fullScreen)
                 .setFullScreenIntent(fullScreen, true)
+                .addAction(startAction)
+                .addAction(snoozeAction)
+                .addAction(closeAction)
+                .extend(new NotificationCompat.WearableExtender()
+                        .addAction(startAction)
+                        .addAction(snoozeAction)
+                        .addAction(closeAction))
                 .build();
         NotificationManager manager =
                 (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
@@ -68,6 +108,17 @@ public class TaskReminderReceiver extends BroadcastReceiver {
         } catch (RuntimeException ignored) {
             // Full-screen notification remains as the system-approved fallback.
         }
+    }
+
+    private static PendingIntent actionIntent(Context context, long taskId, String title,
+                                              String action, int offset) {
+        Intent intent = new Intent(context, TaskReminderReceiver.class)
+                .setAction(action)
+                .putExtra(EXTRA_TASK_ID, taskId)
+                .putExtra(EXTRA_TASK_TITLE, title);
+        return PendingIntent.getBroadcast(context,
+                (int) (taskId % 100000) * 10 + offset, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
     public static void cancelNotification(Context context, long taskId) {

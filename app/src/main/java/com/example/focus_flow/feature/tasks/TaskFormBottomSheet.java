@@ -36,6 +36,9 @@ import com.example.focus_flow.domain.rules.TaskSplitEngine;
 import com.example.focus_flow.domain.stats.RecentStats;
 import com.example.focus_flow.domain.stats.StatsCalculator;
 import com.example.focus_flow.feature.reminder.TaskReminderScheduler;
+import com.example.focus_flow.feature.reminder.TaskAlarmConfig;
+import com.example.focus_flow.feature.reminder.TaskAlarmSettingsDialog;
+import com.example.focus_flow.feature.widget.FocusQuickWidgetProvider;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
@@ -62,7 +65,8 @@ public class TaskFormBottomSheet extends BottomSheetDialogFragment {
     private EditText estimatedInput;
     private EditText plannedDateInput;
     private EditText deadlineInput;
-    private EditText reminderInput;
+    private MaterialButton reminderButton;
+    private TaskAlarmConfig alarmConfig;
     private Spinner difficultySpinner;
     private Spinner prioritySpinner;
     private Spinner colorSpinner;
@@ -120,8 +124,6 @@ public class TaskFormBottomSheet extends BottomSheetDialogFragment {
         plannedDateInput.setId(com.example.focus_flow.R.id.task_input_planned_date);
         deadlineInput = input("截止时间 yyyy-MM-dd HH:mm（可选）", InputType.TYPE_CLASS_TEXT, 1);
         deadlineInput.setId(com.example.focus_flow.R.id.task_input_deadline);
-        reminderInput = input("闹钟提醒 yyyy-MM-dd HH:mm（可选）", InputType.TYPE_CLASS_TEXT, 1);
-        reminderInput.setId(com.example.focus_flow.R.id.task_input_reminder);
         difficultySpinner = spinner(new String[]{"轻松", "普通", "困难", "高压"});
         difficultySpinner.setId(com.example.focus_flow.R.id.task_spinner_difficulty);
         prioritySpinner = spinner(new String[]{"低", "中", "高", "紧急"});
@@ -151,7 +153,12 @@ public class TaskFormBottomSheet extends BottomSheetDialogFragment {
         addLabeledSpinner(advanced, "优先级", prioritySpinner);
         addField(advanced, plannedDateInput);
         addField(advanced, deadlineInput);
-        addField(advanced, reminderInput);
+        reminderButton = TaskUi.button(requireContext(), "闹钟提醒：未设置", false);
+        reminderButton.setId(com.example.focus_flow.R.id.task_button_alarm_settings);
+        reminderButton.setOnClickListener(v -> showAlarmSettings());
+        advanced.addView(reminderButton, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        advanced.addView(TaskUi.spacer(requireContext(), 8));
         addLabeledSpinner(advanced, "颜色标签", colorSpinner);
         advanced.addView(autoSplitSwitch);
         form.addView(advanced);
@@ -188,6 +195,7 @@ public class TaskFormBottomSheet extends BottomSheetDialogFragment {
             plannedDateInput.setText(initialPlannedDate == null
                     ? DateTimeUtils.todayDateString()
                     : initialPlannedDate);
+            updateAlarmButton();
             return;
         }
         titleInput.setText(editingTask.title);
@@ -199,10 +207,8 @@ public class TaskFormBottomSheet extends BottomSheetDialogFragment {
         if (editingTask.deadlineAt != null) {
             deadlineInput.setText(deadlineFormat().format(new java.util.Date(editingTask.deadlineAt)));
         }
-        Long reminderAt = TaskReminderScheduler.getReminderAt(requireContext(), editingTask.id);
-        if (reminderAt != null) {
-            reminderInput.setText(deadlineFormat().format(new java.util.Date(reminderAt)));
-        }
+        alarmConfig = TaskReminderScheduler.getConfig(requireContext(), editingTask.id);
+        updateAlarmButton();
         difficultySpinner.setSelection(editingTask.difficulty.ordinal());
         prioritySpinner.setSelection(editingTask.priority.ordinal());
         colorSpinner.setSelection(editingTask.colorTag.ordinal());
@@ -248,13 +254,13 @@ public class TaskFormBottomSheet extends BottomSheetDialogFragment {
             provider.taskRepository.replacePendingBlocks(task.id, blocks);
             taskId = task.id;
         }
-        Long reminderAt = parseReminder(false);
-        if (reminderAt == null) {
+        if (alarmConfig == null) {
             TaskReminderScheduler.cancel(requireContext(), taskId);
         } else {
-            TaskReminderScheduler.schedule(requireContext(), taskId, task.title, reminderAt);
+            TaskReminderScheduler.schedule(requireContext(), taskId, task.title, alarmConfig);
             requestNotificationPermissionIfNeeded();
         }
+        FocusQuickWidgetProvider.refreshAll(requireContext());
         callback.onSaved(startNow, taskId);
         dismiss();
     }
@@ -314,12 +320,9 @@ public class TaskFormBottomSheet extends BottomSheetDialogFragment {
             deadlineInput.setError("新任务截止时间需至少晚于当前 10 分钟");
             ok = false;
         }
-        String reminderText = StringUtils.trim(reminderInput.getText().toString());
-        Long reminder = parseReminder(true);
-        if (!reminderText.isEmpty() && reminder == null) {
-            ok = false;
-        } else if (reminder != null && reminder < System.currentTimeMillis() + 60 * 1000L) {
-            reminderInput.setError("提醒时间需至少晚于当前 1 分钟");
+        if (alarmConfig != null && alarmConfig.triggerAtMillis < System.currentTimeMillis() + 60 * 1000L) {
+            android.widget.Toast.makeText(requireContext(),
+                    "闹钟时间需至少晚于当前 1 分钟", android.widget.Toast.LENGTH_SHORT).show();
             ok = false;
         }
         return ok;
@@ -350,22 +353,6 @@ public class TaskFormBottomSheet extends BottomSheetDialogFragment {
         }
     }
 
-    private Long parseReminder(boolean markError) {
-        String text = StringUtils.trim(reminderInput.getText().toString());
-        if (text.length() == 0) {
-            return null;
-        }
-        try {
-            java.util.Date date = deadlineFormat().parse(text);
-            return date == null ? null : date.getTime();
-        } catch (ParseException ex) {
-            if (markError) {
-                reminderInput.setError("格式必须为 yyyy-MM-dd HH:mm");
-            }
-            return null;
-        }
-    }
-
     private SimpleDateFormat deadlineFormat() {
         return new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault());
     }
@@ -378,7 +365,29 @@ public class TaskFormBottomSheet extends BottomSheetDialogFragment {
         estimatedInput.setError(null);
         plannedDateInput.setError(null);
         deadlineInput.setError(null);
-        reminderInput.setError(null);
+    }
+
+    private void showAlarmSettings() {
+        new TaskAlarmSettingsDialog(alarmConfig, config -> {
+            alarmConfig = config;
+            updateAlarmButton();
+        }).show(getParentFragmentManager(), "task_alarm_settings");
+    }
+
+    private void updateAlarmButton() {
+        if (reminderButton == null) return;
+        if (alarmConfig == null) {
+            reminderButton.setText("闹钟提醒：未设置");
+            return;
+        }
+        String repeat;
+        if (TaskAlarmConfig.REPEAT_DAILY.equals(alarmConfig.repeatMode)) repeat = "每天";
+        else if (TaskAlarmConfig.REPEAT_WEEKDAYS.equals(alarmConfig.repeatMode)) repeat = "工作日";
+        else if (TaskAlarmConfig.REPEAT_WEEKLY.equals(alarmConfig.repeatMode)) repeat = "每周";
+        else repeat = "只响一次";
+        reminderButton.setText("闹钟  "
+                + deadlineFormat().format(new java.util.Date(alarmConfig.triggerAtMillis))
+                + "  ·  " + repeat + "  ›");
     }
 
     private EditText input(String hint, int inputType, int lines) {

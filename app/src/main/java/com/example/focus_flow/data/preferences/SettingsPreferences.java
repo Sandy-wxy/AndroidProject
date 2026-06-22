@@ -12,6 +12,7 @@ public class SettingsPreferences {
     private static final String KEY_AUTO_STOP_NOISE = "auto_stop_noise";
     private static final String KEY_CURRENT_NOISE_MIX_ID = "current_noise_mix_id";
     private static final String KEY_MASTER_VOLUME = "master_volume";
+    private static final String KEY_FOREST_TAB_ENABLED = "forest_tab_enabled";
 
     private final SharedPreferences preferences;
 
@@ -57,5 +58,13 @@ public class SettingsPreferences {
 
     public void setMasterVolume(int volume) {
         preferences.edit().putInt(KEY_MASTER_VOLUME, Math.max(0, Math.min(100, volume))).apply();
+    }
+
+    public boolean isForestTabEnabled() {
+        return preferences.getBoolean(KEY_FOREST_TAB_ENABLED, true);
+    }
+
+    public void setForestTabEnabled(boolean enabled) {
+        preferences.edit().putBoolean(KEY_FOREST_TAB_ENABLED, enabled).apply();
     }
 }

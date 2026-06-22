@@ -120,6 +120,8 @@ public class FocusTimerService extends Service {
                 new Intent(this, FocusTimerService.class).setAction(paused ? ACTION_RESUME : ACTION_PAUSE),
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
+        NotificationCompat.Action toggleAction = new NotificationCompat.Action(
+                R.drawable.ic_nav_focus, paused ? "继续" : "暂停", toggleIntent);
         return new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_nav_focus)
                 .setContentTitle(snapshot.session.taskTitleSnapshot)
@@ -127,7 +129,10 @@ public class FocusTimerService extends Service {
                 .setOngoing(!paused)
                 .setOnlyAlertOnce(true)
                 .setContentIntent(openApp)
-                .addAction(R.drawable.ic_nav_focus, paused ? "继续" : "暂停", toggleIntent)
+                .addAction(toggleAction)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+                .extend(new NotificationCompat.WearableExtender().addAction(toggleAction))
                 .build();
     }
 
@@ -140,9 +145,10 @@ public class FocusTimerService extends Service {
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_nav_focus)
                 .setContentTitle("专注完成")
-                .setContentText("回到 Focus_Flow 记录质量评分。")
+                .setContentText("回到番茄Focus查看本次专注总结。")
                 .setContentIntent(openApp)
                 .setAutoCancel(true)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .build();
         NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         manager.notify(NOTIFICATION_ID, notification);

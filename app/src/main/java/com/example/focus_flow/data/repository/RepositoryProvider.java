@@ -60,4 +60,10 @@ public class RepositoryProvider {
         taskRepository.refresh();
         focusSessionRepository.refresh();
     }
+
+    public void refreshAfterCloudRestore() {
+        taskRepository.refresh();
+        focusSessionRepository.refresh();
+        noiseMixRepository.restorePresetMixesIfMissing();
+    }
 }

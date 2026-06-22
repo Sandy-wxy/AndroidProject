@@ -25,4 +25,8 @@
     <color name="focus_orange">#D97706</color>
     <color name="focus_pink">#DB2777</color>
     <color name="nav_unselected">#64748B</color>
+    <color name="icon_classic_bg">#0891B2</color>
+    <color name="icon_ocean_bg">#2563EB</color>
+    <color name="icon_aurora_bg">#7C3AED</color>
+    <color name="icon_forest_bg">#059669</color>
 </resources>

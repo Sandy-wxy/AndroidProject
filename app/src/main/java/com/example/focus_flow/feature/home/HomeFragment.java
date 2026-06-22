@@ -18,6 +18,7 @@ import androidx.navigation.fragment.NavHostFragment;
 
 import com.example.focus_flow.R;
 import com.example.focus_flow.SettingsActivity;
+import com.example.focus_flow.MainActivity;
 import com.example.focus_flow.core.common.DateTimeUtils;
 import com.example.focus_flow.core.model.RecommendationConfidence;
 import com.example.focus_flow.core.model.TaskStatus;
@@ -37,6 +38,7 @@ import com.example.focus_flow.feature.tasks.TaskCards;
 import com.example.focus_flow.feature.tasks.TaskFormBottomSheet;
 import com.example.focus_flow.feature.tasks.TaskUi;
 import com.example.focus_flow.feature.reminder.TaskReminderScheduler;
+import com.example.focus_flow.feature.widget.FocusQuickWidgetProvider;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
 
@@ -69,12 +71,17 @@ public class HomeFragment extends Fragment {
     public void onResume() {
         super.onResume();
         render();
+        if (requireActivity() instanceof MainActivity
+                && ((MainActivity) requireActivity()).consumeAddTaskRequest()) {
+            showTaskForm(null);
+        }
     }
 
     private void render() {
         provider.taskRepository.refresh();
         provider.focusSessionRepository.refresh();
         provider.noiseMixRepository.refresh();
+        FocusQuickWidgetProvider.refreshAll(requireContext());
         content.removeAllViews();
         List<TaskRecord> selectedTasks = provider.taskRepository.getTasksForDate(
                 DateTimeUtils.formatDate(selectedDate));
@@ -262,6 +269,12 @@ public class HomeFragment extends Fragment {
                 NavHostFragment.findNavController(this).navigate(R.id.focusFragment);
             }
         }).show(getParentFragmentManager(), "task_form");
+    }
+
+    public void openTaskCreator() {
+        if (isAdded()) {
+            showTaskForm(null);
+        }
     }
 
     private void moveTask(TaskRecord task, long destinationDate) {

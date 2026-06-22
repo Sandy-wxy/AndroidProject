@@ -16,6 +16,7 @@
     <item name="task_input_planned_date" type="id" />
     <item name="task_input_deadline" type="id" />
     <item name="task_input_reminder" type="id" />
+    <item name="task_button_alarm_settings" type="id" />
     <item name="task_spinner_difficulty" type="id" />
     <item name="task_spinner_priority" type="id" />
     <item name="task_spinner_color" type="id" />
@@ -44,6 +45,15 @@
     <item name="settings_auto_stop_switch" type="id" />
     <item name="settings_master_volume" type="id" />
     <item name="settings_clear_data_button" type="id" />
+    <item name="settings_forest_tab_switch" type="id" />
+    <item name="settings_cloud_url" type="id" />
+    <item name="settings_cloud_username" type="id" />
+    <item name="settings_cloud_password" type="id" />
+    <item name="settings_cloud_auto_sync" type="id" />
+    <item name="settings_cloud_save" type="id" />
+    <item name="settings_cloud_sync" type="id" />
+    <item name="settings_cloud_backup" type="id" />
+    <item name="settings_cloud_restore" type="id" />
     <item name="stats_filter_today" type="id" />
     <item name="stats_filter_week" type="id" />
     <item name="stats_filter_month" type="id" />
@@ -57,6 +67,12 @@
     <item name="profile_calendar" type="id" />
     <item name="profile_contribution_heatmap" type="id" />
     <item name="profile_selected_day_tasks" type="id" />
+    <item name="profile_card_identity" type="id" />
+    <item name="profile_button_edit" type="id" />
+    <item name="profile_edit_name" type="id" />
+    <item name="profile_edit_email" type="id" />
+    <item name="profile_button_change_avatar" type="id" />
+    <item name="profile_button_app_icon" type="id" />
     <item name="alarm_button_start" type="id" />
     <item name="alarm_button_snooze" type="id" />
     <item name="alarm_button_close" type="id" />

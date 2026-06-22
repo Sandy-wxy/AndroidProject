@@ -5,6 +5,8 @@ import android.media.Ringtone;
 import android.media.RingtoneManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.view.WindowManager;
@@ -23,6 +25,9 @@ public class TaskAlarmActivity extends AppCompatActivity {
     private long taskId;
     private String taskTitle;
     private Ringtone ringtone;
+    private TaskAlarmConfig config;
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private final Runnable autoStop = this::stopRinging;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -55,6 +60,8 @@ public class TaskAlarmActivity extends AppCompatActivity {
         if (taskTitle == null || taskTitle.trim().isEmpty()) {
             taskTitle = "学习任务";
         }
+        config = TaskReminderScheduler.getConfig(this, taskId);
+        if (config == null) config = new TaskAlarmConfig();
     }
 
     private void render() {
@@ -77,8 +84,12 @@ public class TaskAlarmActivity extends AppCompatActivity {
 
         MaterialButton yes = TaskUi.button(this, "是，进入专注", true);
         yes.setId(R.id.alarm_button_start);
-        MaterialButton later = TaskUi.button(this, "等会（5分钟后提醒）", false);
+        String laterText = config.snoozeCount <= 0
+                ? "等会（未启用再响）"
+                : "等会（" + config.snoozeMinutes + "分钟后提醒）";
+        MaterialButton later = TaskUi.button(this, laterText, false);
         later.setId(R.id.alarm_button_snooze);
+        later.setEnabled(config.snoozeCount > 0);
         MaterialButton close = TaskUi.button(this, "关闭", false);
         close.setId(R.id.alarm_button_close);
         body.addView(yes, matchWidth());
@@ -123,7 +134,10 @@ public class TaskAlarmActivity extends AppCompatActivity {
 
     private void startRinging() {
         stopRinging();
-        android.net.Uri alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
+        int type = RingtoneManager.TYPE_ALARM;
+        if ("NOTIFICATION".equals(config.ringtone)) type = RingtoneManager.TYPE_NOTIFICATION;
+        else if ("RINGTONE".equals(config.ringtone)) type = RingtoneManager.TYPE_RINGTONE;
+        android.net.Uri alarmUri = RingtoneManager.getDefaultUri(type);
         if (alarmUri == null) {
             alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
         }
@@ -134,9 +148,12 @@ public class TaskAlarmActivity extends AppCompatActivity {
             }
             ringtone.play();
         }
+        handler.removeCallbacks(autoStop);
+        handler.postDelayed(autoStop, Math.max(1, config.ringDurationMinutes) * 60_000L);
     }
 
     private void stopRinging() {
+        handler.removeCallbacks(autoStop);
         if (ringtone != null && ringtone.isPlaying()) {
             ringtone.stop();
         }

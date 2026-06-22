@@ -84,8 +84,10 @@ public class FocusFragment extends Fragment {
             FocusTimerService.start(requireContext());
             return;
         }
-        long taskId = new FocusStartStore(requireContext()).consumePendingTaskId();
-        if (taskId > 0 && controller.startForTask(taskId) != null) {
+        FocusStartStore startStore = new FocusStartStore(requireContext());
+        long taskId = startStore.consumePendingTaskId();
+        int requestedMinutes = startStore.consumePendingMinutes();
+        if (taskId > 0 && controller.startForTask(taskId, requestedMinutes) != null) {
             summarySession = null;
             FocusTimerService.start(requireContext());
         }
@@ -260,6 +262,54 @@ public class FocusFragment extends Fragment {
         body.addView(tasks);
         tasks.setOnClickListener(v -> NavHostFragment.findNavController(this).navigate(R.id.homeFragment));
         content.addView(card);
+        addEnvironmentPresets();
+    }
+
+    private void addEnvironmentPresets() {
+        content.addView(TaskUi.spacer(requireContext(), 12));
+        MaterialCardView card = TaskUi.glassCard(requireContext());
+        LinearLayout body = TaskUi.vertical(requireContext(), 18);
+        card.addView(body);
+        body.addView(TaskUi.text(requireContext(), "专注环境", 20,
+                requireContext().getColor(R.color.text_primary),
+                android.graphics.Typeface.BOLD));
+        body.addView(TaskUi.text(requireContext(),
+                "快速进入适合当前状态的声音场景。",
+                13, requireContext().getColor(R.color.text_secondary),
+                android.graphics.Typeface.NORMAL));
+        LinearLayout row = TaskUi.horizontal(requireContext());
+        String[] names = {"雨夜窗边", "森林晨雾", "图书馆自习"};
+        for (String name : names) {
+            MaterialButton button = TaskUi.button(requireContext(), name, false);
+            button.setOnClickListener(v -> applyEnvironment(name));
+            row.addView(button, new LinearLayout.LayoutParams(
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        }
+        body.addView(row);
+        MaterialButton quiet = TaskUi.button(requireContext(), "静音专注", false);
+        quiet.setOnClickListener(v -> {
+            com.example.focus_flow.audio.NoisePlaybackController.get().stopAll();
+            android.widget.Toast.makeText(requireContext(),
+                    "已切换为静音专注", android.widget.Toast.LENGTH_SHORT).show();
+        });
+        body.addView(quiet);
+        content.addView(card);
+    }
+
+    private void applyEnvironment(String name) {
+        com.example.focus_flow.data.repository.RepositoryProvider provider =
+                com.example.focus_flow.data.repository.RepositoryProvider.get(requireContext());
+        for (com.example.focus_flow.data.local.model.NoiseMixRecord mix
+                : provider.noiseMixRepository.getAllMixes()) {
+            if (name.equals(mix.name)) {
+                provider.noiseMixRepository.applyMix(mix.id);
+                com.example.focus_flow.audio.NoisePlaybackController.get().applyMix(
+                        requireContext(), mix, provider.settingsRepository.getMasterVolume());
+                android.widget.Toast.makeText(requireContext(),
+                        "已开启 " + name, android.widget.Toast.LENGTH_SHORT).show();
+                return;
+            }
+        }
     }
 
     private void confirmFinishEarly() {

@@ -13,6 +13,7 @@ import com.example.focus_flow.data.local.model.TaskRecord;
 import com.example.focus_flow.data.repository.RepositoryProvider;
 import com.example.focus_flow.domain.rules.ProgressEngine;
 import com.example.focus_flow.feature.reminder.TaskReminderScheduler;
+import com.example.focus_flow.feature.widget.FocusQuickWidgetProvider;
 
 import java.util.List;
 
@@ -29,6 +30,10 @@ public class FocusTimerController {
     }
 
     public FocusSessionRecord startForTask(long taskId) {
+        return startForTask(taskId, -1);
+    }
+
+    public FocusSessionRecord startForTask(long taskId, int requestedMinutes) {
         FocusSessionRecord running = provider.focusSessionRepository.getRunningSession();
         if (running != null) {
             return running;
@@ -48,6 +53,10 @@ public class FocusTimerController {
         session.difficultySnapshot = task.difficulty;
         session.prioritySnapshot = task.priority;
         session.plannedFocusMinutes = block == null ? Math.max(10, Math.min(60, task.estimatedTotalMinutes)) : block.plannedFocusMinutes;
+        if (requestedMinutes >= 10) {
+            session.plannedFocusMinutes = Math.max(10, Math.min(60, requestedMinutes));
+            session.blockId = null;
+        }
         session.plannedBreakMinutes = block == null ? 5 : block.plannedBreakMinutes;
         session.startedAt = now;
         session.createdAt = now;
@@ -56,13 +65,14 @@ public class FocusTimerController {
         session.noiseMixNameSnapshot = mix == null ? "" : mix.name;
 
         provider.focusSessionRepository.insertSession(session);
-        if (block != null) {
+        if (block != null && requestedMinutes < 10) {
             provider.focusBlockLocalDataSource.updateBlockStatus(block.id, FocusBlockStatus.RUNNING, null);
         }
         provider.taskRepository.updateTaskStatus(task.id, TaskStatus.IN_PROGRESS);
         stateStore.clearPause();
         provider.focusSessionRepository.refresh();
         provider.taskRepository.refresh();
+        FocusQuickWidgetProvider.refreshAll(context);
         return session;
     }
 
@@ -172,6 +182,7 @@ public class FocusTimerController {
         }
         provider.focusSessionRepository.refresh();
         provider.taskRepository.refresh();
+        FocusQuickWidgetProvider.refreshAll(context);
         return session;
     }
 

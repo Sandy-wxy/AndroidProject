@@ -41,4 +41,12 @@ public class SettingsRepository {
     public void setMasterVolume(int volume) {
         preferences.setMasterVolume(volume);
     }
+
+    public boolean isForestTabEnabled() {
+        return preferences.isForestTabEnabled();
+    }
+
+    public void setForestTabEnabled(boolean enabled) {
+        preferences.setForestTabEnabled(enabled);
+    }
 }

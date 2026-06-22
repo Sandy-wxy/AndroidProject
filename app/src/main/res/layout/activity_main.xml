@@ -40,6 +40,12 @@
             android:text="@string/nav_focus" />
 
         <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/nav_forest"
+            style="@style/WidgetFocusFlowNavItem"
+            android:drawableTop="@drawable/ic_nav_forest"
+            android:text="@string/nav_forest" />
+
+        <com.google.android.material.textview.MaterialTextView
             android:id="@+id/nav_profile"
             style="@style/WidgetFocusFlowNavItem"
             android:drawableTop="@drawable/ic_nav_profile"
