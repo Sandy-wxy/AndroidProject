@@ -152,6 +152,7 @@ public class FocusFragment extends Fragment {
             body.addView(confirmFinishPanel());
         }
         content.addView(card);
+        addEnvironmentPresets();
 
         pauseResume.setOnClickListener(v -> {
             if (snapshot.paused) {
@@ -163,13 +164,6 @@ public class FocusFragment extends Fragment {
             render();
         });
         finish.setOnClickListener(v -> confirmFinishEarly());
-        finish.setOnTouchListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_UP && v.isEnabled()) {
-                v.performClick();
-                return true;
-            }
-            return event.getAction() == MotionEvent.ACTION_DOWN;
-        });
     }
 
     private View confirmFinishPanel() {
@@ -286,6 +280,10 @@ public class FocusFragment extends Fragment {
                     0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         }
         body.addView(row);
+        MaterialButton noiseConsole = TaskUi.button(requireContext(), "白噪音控制台", true);
+        noiseConsole.setId(R.id.focus_button_noise_console);
+        noiseConsole.setOnClickListener(v -> NavHostFragment.findNavController(this).navigate(R.id.noiseFragment));
+        body.addView(noiseConsole);
         MaterialButton quiet = TaskUi.button(requireContext(), "静音专注", false);
         quiet.setOnClickListener(v -> {
             com.example.focus_flow.audio.NoisePlaybackController.get().stopAll();

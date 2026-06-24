@@ -12,14 +12,14 @@
         android:name="androidx.navigation.fragment.NavHostFragment"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_marginBottom="76dp"
+        android:layout_marginBottom="66dp"
         app:defaultNavHost="true"
         app:navGraph="@navigation/nav_graph" />
 
     <LinearLayout
         android:id="@+id/bottom_nav"
         android:layout_width="match_parent"
-        android:layout_height="76dp"
+        android:layout_height="66dp"
         android:layout_gravity="bottom"
         android:background="@drawable/bg_bottom_nav_glass"
         android:gravity="center"
@@ -27,29 +27,65 @@
         android:paddingStart="6dp"
         android:paddingEnd="6dp">
 
-        <com.google.android.material.textview.MaterialTextView
+        <LinearLayout
             android:id="@+id/nav_home"
-            style="@style/WidgetFocusFlowNavItem"
-            android:drawableTop="@drawable/ic_nav_home"
-            android:text="@string/nav_home" />
+            style="@style/WidgetFocusFlowNavContainer"
+            android:contentDescription="@string/nav_home">
 
-        <com.google.android.material.textview.MaterialTextView
+            <ImageView
+                style="@style/WidgetFocusFlowNavIcon"
+                android:importantForAccessibility="no"
+                android:src="@drawable/ic_nav_home" />
+
+            <com.google.android.material.textview.MaterialTextView
+                style="@style/WidgetFocusFlowNavLabel"
+                android:text="@string/nav_home" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/nav_tasks"
+            style="@style/WidgetFocusFlowNavContainer"
+            android:contentDescription="@string/nav_tasks">
+
+            <ImageView
+                style="@style/WidgetFocusFlowNavIcon"
+                android:importantForAccessibility="no"
+                android:src="@drawable/ic_nav_tasks" />
+
+            <com.google.android.material.textview.MaterialTextView
+                style="@style/WidgetFocusFlowNavLabel"
+                android:text="@string/nav_tasks" />
+        </LinearLayout>
+
+        <LinearLayout
             android:id="@+id/nav_focus"
-            style="@style/WidgetFocusFlowNavItem"
-            android:drawableTop="@drawable/ic_nav_focus"
-            android:text="@string/nav_focus" />
+            style="@style/WidgetFocusFlowNavContainer"
+            android:contentDescription="@string/nav_focus">
 
-        <com.google.android.material.textview.MaterialTextView
+            <ImageView
+                style="@style/WidgetFocusFlowNavIcon"
+                android:importantForAccessibility="no"
+                android:src="@drawable/ic_nav_focus" />
+
+            <com.google.android.material.textview.MaterialTextView
+                style="@style/WidgetFocusFlowNavLabel"
+                android:text="@string/nav_focus" />
+        </LinearLayout>
+
+        <LinearLayout
             android:id="@+id/nav_forest"
-            style="@style/WidgetFocusFlowNavItem"
-            android:drawableTop="@drawable/ic_nav_forest"
-            android:text="@string/nav_forest" />
+            style="@style/WidgetFocusFlowNavContainer"
+            android:contentDescription="@string/nav_forest">
 
-        <com.google.android.material.textview.MaterialTextView
-            android:id="@+id/nav_profile"
-            style="@style/WidgetFocusFlowNavItem"
-            android:drawableTop="@drawable/ic_nav_profile"
-            android:text="@string/nav_profile" />
+            <ImageView
+                style="@style/WidgetFocusFlowNavIcon"
+                android:importantForAccessibility="no"
+                android:src="@drawable/ic_nav_forest" />
+
+            <com.google.android.material.textview.MaterialTextView
+                style="@style/WidgetFocusFlowNavLabel"
+                android:text="@string/nav_forest" />
+        </LinearLayout>
     </LinearLayout>
 
 </com.example.focus_flow.core.ui.AuroraCoordinatorLayout>

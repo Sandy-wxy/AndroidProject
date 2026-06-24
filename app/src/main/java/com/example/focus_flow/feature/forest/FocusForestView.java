@@ -12,7 +12,11 @@ import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.example.focus_flow.core.model.FocusSessionStatus;
 import com.example.focus_flow.data.local.model.FocusSessionRecord;
+import com.example.focus_flow.domain.forest.ForestEvolutionEngine;
+import com.example.focus_flow.domain.forest.ForestState;
+import com.example.focus_flow.domain.forest.ForestTree;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,7 +24,8 @@ import java.util.Random;
 
 public class FocusForestView extends View {
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final List<FocusSessionRecord> trees = new ArrayList<>();
+    private final List<ForestTree> trees = new ArrayList<>();
+    private ForestState state;
 
     public FocusForestView(Context context) {
         super(context);
@@ -31,8 +36,15 @@ public class FocusForestView extends View {
     }
 
     public void setTrees(List<FocusSessionRecord> sessions) {
+        setForestState(new ForestEvolutionEngine().evaluate(sessions, System.currentTimeMillis()));
+    }
+
+    public void setForestState(ForestState forestState) {
+        state = forestState;
         trees.clear();
-        trees.addAll(sessions);
+        if (forestState != null) {
+            trees.addAll(forestState.trees);
+        }
         invalidate();
     }
 
@@ -42,7 +54,7 @@ public class FocusForestView extends View {
         int width = getWidth();
         int height = getHeight();
 
-        paint.setColor(Color.rgb(222, 248, 239));
+        paint.setColor(backgroundColor());
         canvas.drawRoundRect(new RectF(0, 0, width, height), 36, 36, paint);
         drawSun(canvas, width * 0.82f, height * 0.17f);
         drawCloud(canvas, width * 0.22f, height * 0.19f);
@@ -82,18 +94,58 @@ public class FocusForestView extends View {
         int visible = Math.min(30, trees.size());
         Random random = new Random(20260622L);
         for (int i = 0; i < visible; i++) {
-            FocusSessionRecord session = trees.get(trees.size() - visible + i);
+            ForestTree tree = trees.get(trees.size() - visible + i);
             float x = width * (0.08f + random.nextFloat() * 0.84f);
             float depth = random.nextFloat();
             float y = height * (0.57f + depth * 0.31f);
             float scale = 0.55f + depth * 0.65f;
-            if (session.actualFocusSeconds >= 90 * 60) {
-                drawGoldenTree(canvas, x, y, scale);
-            } else if (session.actualFocusSeconds >= 45 * 60) {
-                drawPine(canvas, x, y, scale);
-            } else {
-                drawTree(canvas, x, y, scale);
-            }
+            drawForestTree(canvas, tree, x, y, scale);
+        }
+    }
+
+    private int backgroundColor() {
+        if (state == null || state.level == null) {
+            return Color.rgb(222, 248, 239);
+        }
+        if (state.level.levelNumber >= 5) {
+            return Color.rgb(214, 238, 250);
+        }
+        if (state.level.levelNumber >= 4) {
+            return Color.rgb(220, 242, 225);
+        }
+        if (state.level.levelNumber >= 3) {
+            return Color.rgb(222, 248, 239);
+        }
+        return Color.rgb(232, 248, 229);
+    }
+
+    private void drawForestTree(Canvas canvas, ForestTree tree, float x, float y, float scale) {
+        float sizedScale = scale;
+        if (tree.sizeTier == ForestTree.SizeTier.TALL) {
+            sizedScale *= 1.12f;
+        } else if (tree.sizeTier == ForestTree.SizeTier.GIANT) {
+            sizedScale *= 1.28f;
+        }
+        switch (tree.species) {
+            case PINE:
+                drawPine(canvas, x, y, sizedScale);
+                break;
+            case BLOOM:
+                drawBloomTree(canvas, x, y, sizedScale);
+                break;
+            case CYPRESS:
+                drawCypress(canvas, x, y, sizedScale);
+                break;
+            case MAPLE:
+                drawGoldenTree(canvas, x, y, sizedScale);
+                break;
+            case BAMBOO:
+                drawBamboo(canvas, x, y, sizedScale);
+                break;
+            case BROADLEAF:
+            default:
+                drawTree(canvas, x, y, sizedScale);
+                break;
         }
     }
 
@@ -126,6 +178,41 @@ public class FocusForestView extends View {
         paint.setColor(Color.rgb(255, 197, 66));
         canvas.drawCircle(x - 16 * scale, y - 38 * scale, 13 * scale, paint);
         canvas.drawCircle(x + 16 * scale, y - 39 * scale, 14 * scale, paint);
+    }
+
+    private void drawBloomTree(Canvas canvas, float x, float y, float scale) {
+        paint.setColor(Color.rgb(112, 73, 48));
+        canvas.drawRoundRect(x - 4 * scale, y - 30 * scale,
+                x + 4 * scale, y + 5 * scale, 4, 4, paint);
+        paint.setColor(Color.rgb(245, 122, 169));
+        canvas.drawCircle(x, y - 43 * scale, 19 * scale, paint);
+        paint.setColor(Color.rgb(255, 168, 198));
+        canvas.drawCircle(x - 14 * scale, y - 35 * scale, 12 * scale, paint);
+        canvas.drawCircle(x + 14 * scale, y - 36 * scale, 12 * scale, paint);
+    }
+
+    private void drawCypress(Canvas canvas, float x, float y, float scale) {
+        paint.setColor(Color.rgb(89, 67, 46));
+        canvas.drawRect(x - 3 * scale, y - 34 * scale, x + 3 * scale, y + 5 * scale, paint);
+        paint.setColor(Color.rgb(21, 109, 93));
+        canvas.drawOval(new RectF(x - 13 * scale, y - 78 * scale,
+                x + 13 * scale, y - 18 * scale), paint);
+        paint.setColor(Color.rgb(34, 145, 119));
+        canvas.drawOval(new RectF(x - 9 * scale, y - 68 * scale,
+                x + 9 * scale, y - 28 * scale), paint);
+    }
+
+    private void drawBamboo(Canvas canvas, float x, float y, float scale) {
+        paint.setColor(Color.rgb(51, 151, 78));
+        canvas.drawRoundRect(x - 3 * scale, y - 62 * scale,
+                x + 3 * scale, y + 4 * scale, 3, 3, paint);
+        canvas.drawRoundRect(x + 8 * scale, y - 52 * scale,
+                x + 14 * scale, y + 4 * scale, 3, 3, paint);
+        paint.setColor(Color.rgb(77, 188, 105));
+        canvas.drawOval(new RectF(x - 25 * scale, y - 58 * scale,
+                x - 1 * scale, y - 42 * scale), paint);
+        canvas.drawOval(new RectF(x + 10 * scale, y - 47 * scale,
+                x + 36 * scale, y - 31 * scale), paint);
     }
 
     private void drawSeedling(Canvas canvas, float x, float y, float scale) {

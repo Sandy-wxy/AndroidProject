@@ -1,6 +1,8 @@
 package com.example.focus_flow.feature.stats;
 
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -11,6 +13,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.navigation.fragment.NavHostFragment;
 
 import com.example.focus_flow.R;
 import com.example.focus_flow.core.common.DateTimeUtils;
@@ -20,12 +23,16 @@ import com.example.focus_flow.core.model.TimeSegment;
 import com.example.focus_flow.data.local.model.FocusSessionRecord;
 import com.example.focus_flow.data.local.model.TaskRecord;
 import com.example.focus_flow.data.repository.RepositoryProvider;
+import com.example.focus_flow.domain.assistant.AiPromptBuilder;
+import com.example.focus_flow.domain.assistant.AiResponseParser;
 import com.example.focus_flow.domain.rules.Advice;
 import com.example.focus_flow.domain.rules.AdviceEngine;
 import com.example.focus_flow.domain.stats.RecentStats;
 import com.example.focus_flow.domain.stats.StatsCalculator;
 import com.example.focus_flow.domain.stats.SummaryStats;
 import com.example.focus_flow.domain.stats.TimeSegmentStats;
+import com.example.focus_flow.feature.assistant.AiProxyClient;
+import com.example.focus_flow.feature.assistant.AiUiTransitions;
 import com.example.focus_flow.feature.tasks.TaskCards;
 import com.example.focus_flow.feature.tasks.TaskUi;
 import com.google.android.material.button.MaterialButton;
@@ -50,6 +57,14 @@ public class StatsFragment extends Fragment {
     private RepositoryProvider provider;
     private final StatsCalculator calculator = new StatsCalculator();
     private Period selectedPeriod = Period.WEEK;
+    private final Handler aiHandler = new Handler(Looper.getMainLooper());
+    private final AiProxyClient aiProxyClient = new AiProxyClient();
+    private final AiResponseParser aiResponseParser = new AiResponseParser();
+    private TextView aiAnalysisTitle;
+    private TextView aiAnalysisBody;
+    private Runnable aiLoadingRunnable;
+    private Runnable aiTypewriterRunnable;
+    private int aiLoadingTick;
 
     @Nullable
     @Override
@@ -69,10 +84,18 @@ public class StatsFragment extends Fragment {
         render();
     }
 
+    @Override
+    public void onDestroyView() {
+        stopAiAnimations();
+        super.onDestroyView();
+    }
+
     private void render() {
+        stopAiAnimations();
         provider.focusSessionRepository.refresh();
         provider.taskRepository.refresh();
         content.removeAllViews();
+        addBackHomeButton();
 
         long now = System.currentTimeMillis();
         List<FocusSessionRecord> periodSessions = terminalSessions(sessionsForPeriod(now));
@@ -83,19 +106,27 @@ public class StatsFragment extends Fragment {
         }
         SummaryStats summary = calculator.calculateSummary(periodSessions);
 
-        content.addView(TaskUi.text(requireContext(), "专注统计", 30,
-                requireContext().getColor(R.color.text_primary), android.graphics.Typeface.BOLD));
-        content.addView(TaskUi.text(requireContext(), "周期洞察、趋势图和本地规则建议。", 14,
-                requireContext().getColor(R.color.text_secondary), android.graphics.Typeface.NORMAL));
-        content.addView(TaskUi.spacer(requireContext(), 16));
         addPeriodSelector();
         addMetricGrid(summary);
         addTrendChart(now);
         addSubjectChart(periodSessions);
+        addAiAnalysisCard(periodSessions, summary);
         addInsightCards(periodSessions, recentSessions);
         addAdviceCards(recentSessions, tasks, now);
     }
 
+    private void addBackHomeButton() {
+        content.addView(TaskUi.backHeader(requireContext(), R.id.stats_button_back_home,
+                "专注统计", "周期洞察、趋势图和智能分析", v -> navigateBack()));
+        content.addView(TaskUi.spacer(requireContext(), 16));
+    }
+
+    private void navigateBack() {
+        androidx.navigation.NavController navController = NavHostFragment.findNavController(this);
+        if (!navController.navigateUp()) {
+            navController.navigate(R.id.homeFragment);
+        }
+    }
     private void addPeriodSelector() {
         MaterialButtonToggleGroup group = new MaterialButtonToggleGroup(requireContext());
         group.setSingleSelection(true);
@@ -186,6 +217,121 @@ public class StatsFragment extends Fragment {
             }
         }
         content.addView(card);
+    }
+
+    private void addAiAnalysisCard(List<FocusSessionRecord> periodSessions, SummaryStats summary) {
+        MaterialCardView card = TaskUi.glassCard(requireContext());
+        card.setId(R.id.stats_ai_analysis_card);
+        LinearLayout body = TaskUi.vertical(requireContext(), 16);
+        card.addView(body);
+        aiAnalysisTitle = TaskUi.text(requireContext(), "智能分析中", 18,
+                requireContext().getColor(R.color.text_primary), android.graphics.Typeface.BOLD);
+        aiAnalysisBody = TaskUi.text(requireContext(), "正在整理本周期的学习节奏", 13,
+                requireContext().getColor(R.color.text_secondary), android.graphics.Typeface.NORMAL);
+        body.addView(aiAnalysisTitle);
+        body.addView(aiAnalysisBody);
+        content.addView(card);
+        startAiLoading();
+        requestStatsAnalysis(periodSessions, summary);
+    }
+
+    private void startAiLoading() {
+        aiLoadingTick = 0;
+        aiLoadingRunnable = () -> {
+            if (!isAdded() || aiAnalysisBody == null) {
+                return;
+            }
+            aiLoadingTick++;
+            StringBuilder dots = new StringBuilder();
+            for (int i = 0; i < aiLoadingTick % 4; i++) {
+                dots.append('.');
+            }
+            aiAnalysisTitle.setText("智能分析中" + dots);
+            aiAnalysisBody.setAlpha(0.55f + 0.45f * ((aiLoadingTick % 2 == 0) ? 1f : 0.6f));
+            aiHandler.postDelayed(aiLoadingRunnable, 420);
+        };
+        aiHandler.post(aiLoadingRunnable);
+    }
+
+    private void requestStatsAnalysis(List<FocusSessionRecord> periodSessions, SummaryStats summary) {
+        AiPromptBuilder.StatsAnalysisContext context = new AiPromptBuilder.StatsAnalysisContext();
+        context.period = selectedPeriod.name().toLowerCase(Locale.US);
+        context.totalFocusMinutes = Math.max(0, summary.totalFocusSeconds / 60);
+        context.completedCount = summary.completedCount;
+        context.completionRate = summary.completionRate;
+        context.averageQuality = summary.averageQuality;
+        context.subjectSummaries = subjectSummaryStrings(periodSessions);
+        String prompt = new AiPromptBuilder().buildStatsAnalysisPrompt(context);
+        aiProxyClient.chat(prompt, new AiProxyClient.Callback() {
+            @Override
+            public void onSuccess(String responseBody) {
+                if (!isAdded() || aiAnalysisBody == null) {
+                    return;
+                }
+                stopAiLoading();
+                String result = aiResponseParser.parseResultText(responseBody);
+                if (result.trim().isEmpty()) {
+                    result = "本周期数据已更新。下方本地洞察可继续用于调整学习节奏。";
+                }
+                String finalResult = result.trim();
+                AiUiTransitions.crossFadeText(aiAnalysisTitle, "AI 学习分析", aiAnalysisBody, "", true);
+                aiHandler.postDelayed(() -> typewriteAiResult(finalResult), AiUiTransitions.TEXT_CROSS_FADE_MS + 30L);
+            }
+
+            @Override
+            public void onError(Exception error) {
+                if (!isAdded() || aiAnalysisBody == null) {
+                    return;
+                }
+                stopAiLoading();
+                AiUiTransitions.crossFadeText(aiAnalysisTitle, "本地洞察已就绪", aiAnalysisBody,
+                        "AI 分析暂时未返回，先参考下方本地规则洞察。", true);
+            }
+        });
+    }
+
+    private void typewriteAiResult(String result) {
+        aiAnalysisBody.setAlpha(1f);
+        aiAnalysisBody.setText("");
+        final int[] index = {0};
+        aiTypewriterRunnable = () -> {
+            if (!isAdded() || aiAnalysisBody == null) {
+                return;
+            }
+            int next = Math.min(result.length(), index[0] + 3);
+            aiAnalysisBody.setText(result.substring(0, next));
+            index[0] = next;
+            if (index[0] < result.length()) {
+                aiHandler.postDelayed(aiTypewriterRunnable, 26);
+            }
+        };
+        aiHandler.post(aiTypewriterRunnable);
+    }
+
+    private void stopAiLoading() {
+        if (aiLoadingRunnable != null) {
+            aiHandler.removeCallbacks(aiLoadingRunnable);
+        }
+        aiLoadingRunnable = null;
+    }
+
+    private void stopAiAnimations() {
+        stopAiLoading();
+        if (aiTypewriterRunnable != null) {
+            aiHandler.removeCallbacks(aiTypewriterRunnable);
+        }
+        aiTypewriterRunnable = null;
+    }
+
+    private List<String> subjectSummaryStrings(List<FocusSessionRecord> sessions) {
+        Map<String, Integer> raw = calculator.subjectSeconds(sessions);
+        List<Map.Entry<String, Integer>> entries = sortedEntries(raw);
+        List<String> result = new ArrayList<>();
+        for (int i = 0; i < Math.min(5, entries.size()); i++) {
+            Map.Entry<String, Integer> entry = entries.get(i);
+            result.add((entry.getKey() == null ? "unknown" : entry.getKey()) + ":" + (entry.getValue() / 60));
+        }
+        return result;
     }
 
     private void addInsightCards(List<FocusSessionRecord> periodSessions, List<FocusSessionRecord> recentSessions) {

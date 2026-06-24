@@ -1,11 +1,17 @@
 package com.example.focus_flow.feature.tasks;
 
 import android.Manifest;
+import android.app.DatePickerDialog;
+import android.app.TimePickerDialog;
 import android.app.Dialog;
 import android.content.pm.PackageManager;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.Bundle;
+import android.text.Editable;
 import android.text.InputType;
+import android.text.TextWatcher;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -25,16 +31,24 @@ import com.example.focus_flow.core.model.ColorTag;
 import com.example.focus_flow.core.model.TaskDifficulty;
 import com.example.focus_flow.core.model.TaskPriority;
 import com.example.focus_flow.core.model.TaskStatus;
+import com.example.focus_flow.core.model.TimeSegment;
 import com.example.focus_flow.data.local.model.FocusBlockRecord;
 import com.example.focus_flow.data.local.model.FocusSessionRecord;
 import com.example.focus_flow.data.local.model.TaskRecord;
 import com.example.focus_flow.data.repository.RepositoryProvider;
+import com.example.focus_flow.domain.assistant.AiPromptBuilder;
+import com.example.focus_flow.domain.assistant.AiResponseParser;
+import com.example.focus_flow.domain.assistant.TaskRewriteEngine;
+import com.example.focus_flow.domain.assistant.TaskRewriteSession;
+import com.example.focus_flow.domain.assistant.TaskRewriteSuggestion;
 import com.example.focus_flow.domain.rules.FocusRecommendationEngine;
 import com.example.focus_flow.domain.rules.ProgressEngine;
 import com.example.focus_flow.domain.rules.Recommendation;
 import com.example.focus_flow.domain.rules.TaskSplitEngine;
 import com.example.focus_flow.domain.stats.RecentStats;
 import com.example.focus_flow.domain.stats.StatsCalculator;
+import com.example.focus_flow.feature.assistant.AiProxyClient;
+import com.example.focus_flow.feature.assistant.AiUiTransitions;
 import com.example.focus_flow.feature.reminder.TaskReminderScheduler;
 import com.example.focus_flow.feature.reminder.TaskAlarmConfig;
 import com.example.focus_flow.feature.reminder.TaskAlarmSettingsDialog;
@@ -47,10 +61,14 @@ import com.google.android.material.switchmaterial.SwitchMaterial;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
 public class TaskFormBottomSheet extends BottomSheetDialogFragment {
+    private static final long REWRITE_DEBOUNCE_MS = 2_000L;
     public interface Callback {
         void onSaved(boolean startNow, long taskId);
     }
@@ -71,6 +89,17 @@ public class TaskFormBottomSheet extends BottomSheetDialogFragment {
     private Spinner prioritySpinner;
     private Spinner colorSpinner;
     private SwitchMaterial autoSplitSwitch;
+    private LinearLayout rewriteContainer;
+    private final TaskRewriteSession rewriteSession = new TaskRewriteSession(new TaskRewriteEngine());
+    private final AiResponseParser aiResponseParser = new AiResponseParser();
+    private final AiProxyClient aiProxyClient = new AiProxyClient();
+    private final Handler rewriteHandler = new Handler(Looper.getMainLooper());
+    private Runnable pendingRewriteRunnable;
+    private String pendingRewriteText;
+    private String lastApiRewriteText;
+    private boolean applyingRewrite;
+    private LinearLayout advancedSection;
+    private MaterialButton advancedToggleButton;
 
     public TaskFormBottomSheet(@Nullable TaskRecord editingTask, Callback callback) {
         this(editingTask, null, callback);
@@ -99,6 +128,12 @@ public class TaskFormBottomSheet extends BottomSheetDialogFragment {
         return dialog;
     }
 
+    @Override
+    public void onDestroyView() {
+        cancelPendingRewrite();
+        super.onDestroyView();
+    }
+
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
@@ -124,6 +159,7 @@ public class TaskFormBottomSheet extends BottomSheetDialogFragment {
         plannedDateInput.setId(com.example.focus_flow.R.id.task_input_planned_date);
         deadlineInput = input("截止时间 yyyy-MM-dd HH:mm（可选）", InputType.TYPE_CLASS_TEXT, 1);
         deadlineInput.setId(com.example.focus_flow.R.id.task_input_deadline);
+        installDatePickers();
         difficultySpinner = spinner(new String[]{"轻松", "普通", "困难", "高压"});
         difficultySpinner.setId(com.example.focus_flow.R.id.task_spinner_difficulty);
         prioritySpinner = spinner(new String[]{"低", "中", "高", "紧急"});
@@ -137,13 +173,21 @@ public class TaskFormBottomSheet extends BottomSheetDialogFragment {
         autoSplitSwitch.setChecked(true);
 
         addField(form, titleInput);
+        rewriteContainer = TaskUi.vertical(requireContext(), 10);
+        rewriteContainer.setId(com.example.focus_flow.R.id.task_rewrite_container);
+        rewriteContainer.setVisibility(View.GONE);
+        form.addView(rewriteContainer);
+        installRewriteWatcher();
         form.addView(TaskUi.text(requireContext(), "其余项目已设置常用默认值，需要时再展开修改。",
                 13, requireContext().getColor(com.example.focus_flow.R.color.text_secondary),
                 android.graphics.Typeface.NORMAL));
         MaterialButton advancedToggle = TaskUi.button(requireContext(), "展开更多设置", false);
+        advancedToggleButton = advancedToggle;
+        advancedToggle.setId(com.example.focus_flow.R.id.task_button_advanced_toggle);
         form.addView(advancedToggle);
 
         LinearLayout advanced = TaskUi.vertical(requireContext(), 0);
+        advancedSection = advanced;
         advanced.setVisibility(View.GONE);
         addField(advanced, subjectInput);
         addField(advanced, targetInput);
@@ -163,9 +207,8 @@ public class TaskFormBottomSheet extends BottomSheetDialogFragment {
         advanced.addView(autoSplitSwitch);
         form.addView(advanced);
         advancedToggle.setOnClickListener(v -> {
-            boolean show = advanced.getVisibility() != View.VISIBLE;
-            advanced.setVisibility(show ? View.VISIBLE : View.GONE);
-            advancedToggle.setText(show ? "收起更多设置" : "展开更多设置");
+            triggerPendingRewriteNow();
+            setAdvancedVisible(advanced.getVisibility() != View.VISIBLE);
         });
         form.addView(TaskUi.spacer(requireContext(), 18));
 
@@ -185,6 +228,165 @@ public class TaskFormBottomSheet extends BottomSheetDialogFragment {
         form.addView(buttons);
         bindEditingTask();
         return scrollView;
+    }
+
+    private void setAdvancedVisible(boolean show) {
+        if (advancedSection == null || advancedToggleButton == null) {
+            return;
+        }
+        advancedSection.setVisibility(show ? View.VISIBLE : View.GONE);
+        advancedToggleButton.setText(show ? "收起更多设置" : "展开更多设置");
+    }
+    private void installRewriteWatcher() {
+        if (editingTask != null) {
+            return;
+        }
+        titleInput.setOnFocusChangeListener((view, hasFocus) -> {
+            if (!hasFocus) {
+                triggerPendingRewriteNow();
+            }
+        });
+        titleInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                if (applyingRewrite) {
+                    return;
+                }
+                scheduleRewrite(StringUtils.trim(s == null ? "" : s.toString()));
+            }
+        });
+    }
+
+    private void scheduleRewrite(String rough) {
+        cancelPendingRewrite();
+        if (rough.length() < 3) {
+            return;
+        }
+        pendingRewriteText = rough;
+        pendingRewriteRunnable = () -> runRewriteSuggestions(rough);
+        rewriteHandler.postDelayed(pendingRewriteRunnable, REWRITE_DEBOUNCE_MS);
+    }
+
+    private void triggerPendingRewriteNow() {
+        String rough = pendingRewriteText;
+        if (rough == null || rough.length() < 3) {
+            return;
+        }
+        cancelPendingRewrite();
+        runRewriteSuggestions(rough);
+    }
+
+    private void cancelPendingRewrite() {
+        if (pendingRewriteRunnable != null) {
+            rewriteHandler.removeCallbacks(pendingRewriteRunnable);
+        }
+        pendingRewriteRunnable = null;
+        pendingRewriteText = null;
+    }
+
+    private void runRewriteSuggestions(String rough) {
+        if (!isAdded() || titleInput == null) {
+            return;
+        }
+        String current = StringUtils.trim(titleInput.getText().toString());
+        if (!rough.equals(current) || rough.length() < 3) {
+            return;
+        }
+        List<TaskRewriteSuggestion> local = rewriteSession.requestOnce(
+                rough, TimeSegment.fromMillis(System.currentTimeMillis()));
+        if (!local.isEmpty()) {
+            showRewriteSuggestions(local);
+        }
+        if (!rough.equals(lastApiRewriteText)) {
+            lastApiRewriteText = rough;
+            requestApiRewriteSuggestions(rough);
+        }
+    }
+    private void requestApiRewriteSuggestions(String rough) {
+        AiPromptBuilder.TaskRewriteContext context = new AiPromptBuilder.TaskRewriteContext();
+        context.roughTask = rough;
+        context.currentSegment = TimeSegment.fromMillis(System.currentTimeMillis());
+        String prompt = new AiPromptBuilder().buildTaskRewritePrompt(context);
+        aiProxyClient.chat(prompt, new AiProxyClient.Callback() {
+            @Override
+            public void onSuccess(String responseBody) {
+                if (!isAdded()) {
+                    return;
+                }
+                if (titleInput == null || !rough.equals(StringUtils.trim(titleInput.getText().toString()))) {
+                    return;
+                }
+                List<TaskRewriteSuggestion> api = aiResponseParser.parseTaskRewrites(responseBody);
+                if (!api.isEmpty()) {
+                    showRewriteSuggestions(api);
+                }
+            }
+
+            @Override
+            public void onError(Exception error) {
+                // Local rewrite suggestions stay visible when the proxy is slow or unavailable.
+            }
+        });
+    }
+
+    private void showRewriteSuggestions(List<TaskRewriteSuggestion> suggestions) {
+        if (rewriteContainer == null) {
+            return;
+        }
+        boolean animate = rewriteContainer.getVisibility() == View.VISIBLE
+                && rewriteContainer.getChildCount() > 0;
+        AiUiTransitions.crossFadeChildren(rewriteContainer,
+                () -> renderRewriteSuggestions(suggestions), animate);
+    }
+
+    private void renderRewriteSuggestions(List<TaskRewriteSuggestion> suggestions) {
+        rewriteContainer.removeAllViews();
+        if (suggestions == null || suggestions.isEmpty()) {
+            rewriteContainer.setVisibility(View.GONE);
+            return;
+        }
+        rewriteContainer.setVisibility(View.VISIBLE);
+        rewriteContainer.addView(TaskUi.text(requireContext(), "智能改写建议", 14,
+                requireContext().getColor(com.example.focus_flow.R.color.text_secondary),
+                android.graphics.Typeface.BOLD));
+        List<TaskRewriteSuggestion> visible = new ArrayList<>(suggestions);
+        for (int i = 0; i < Math.min(3, visible.size()); i++) {
+            TaskRewriteSuggestion suggestion = visible.get(i);
+            MaterialButton button = TaskUi.button(requireContext(),
+                    suggestion.title + " · " + suggestion.estimatedMinutes + "min", false);
+            if (i == 0) button.setId(com.example.focus_flow.R.id.task_rewrite_suggestion_1);
+            if (i == 1) button.setId(com.example.focus_flow.R.id.task_rewrite_suggestion_2);
+            if (i == 2) button.setId(com.example.focus_flow.R.id.task_rewrite_suggestion_3);
+            button.setAllCaps(false);
+            button.setOnClickListener(v -> applyRewriteSuggestion(suggestion));
+            rewriteContainer.addView(button, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
+    }
+
+    private void applyRewriteSuggestion(TaskRewriteSuggestion suggestion) {
+        cancelPendingRewrite();
+        applyingRewrite = true;
+        titleInput.setText(suggestion.title);
+        subjectInput.setText(suggestion.subject);
+        targetInput.setText(suggestion.targetOutcome);
+        descriptionInput.setText(suggestion.description);
+        estimatedInput.setText(String.valueOf(suggestion.estimatedMinutes));
+        difficultySpinner.setSelection(suggestion.difficulty.ordinal());
+        prioritySpinner.setSelection(suggestion.priority.ordinal());
+        applyingRewrite = false;
+        setAdvancedVisible(true);
+        if (rewriteContainer != null) {
+            rewriteContainer.setVisibility(View.GONE);
+        }
     }
 
     private void bindEditingTask() {
@@ -288,6 +490,114 @@ public class TaskFormBottomSheet extends BottomSheetDialogFragment {
         }
     }
 
+    private void installDatePickers() {
+        configurePickerInput(plannedDateInput);
+        configurePickerInput(deadlineInput);
+        plannedDateInput.setOnClickListener(v -> showPlannedDatePicker());
+        deadlineInput.setOnClickListener(v -> showDeadlineDatePicker());
+    }
+
+    private void configurePickerInput(EditText input) {
+        input.setInputType(InputType.TYPE_NULL);
+        input.setFocusable(false);
+        input.setFocusableInTouchMode(false);
+        input.setCursorVisible(false);
+        input.setClickable(true);
+    }
+
+    private void showPlannedDatePicker() {
+        Calendar calendar = calendarFromDateText(StringUtils.trim(plannedDateInput.getText().toString()));
+        new DatePickerDialog(requireContext(), (picker, year, month, day) -> {
+            calendar.set(year, month, day, 0, 0, 0);
+            calendar.set(Calendar.MILLISECOND, 0);
+            plannedDateInput.setText(DateTimeUtils.formatDate(calendar.getTimeInMillis()));
+            plannedDateInput.setError(null);
+        }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH),
+                calendar.get(Calendar.DAY_OF_MONTH)).show();
+    }
+
+    private void showDeadlineDatePicker() {
+        Calendar calendar = calendarFromDeadlineText();
+        DatePickerDialog dialog = new DatePickerDialog(requireContext(), (picker, year, month, day) -> {
+            calendar.set(Calendar.YEAR, year);
+            calendar.set(Calendar.MONTH, month);
+            calendar.set(Calendar.DAY_OF_MONTH, day);
+            showDeadlineTimePicker(calendar);
+        }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH),
+                calendar.get(Calendar.DAY_OF_MONTH));
+        dialog.setButton(android.content.DialogInterface.BUTTON_NEUTRAL,
+                "\u6e05\u9664", (ignored, which) -> {
+                    deadlineInput.setText("");
+                    deadlineInput.setError(null);
+                    updateAlarmButton();
+                });
+        dialog.show();
+    }
+
+    private void showDeadlineTimePicker(Calendar calendar) {
+        new TimePickerDialog(requireContext(), (picker, hour, minute) -> {
+            calendar.set(Calendar.HOUR_OF_DAY, hour);
+            calendar.set(Calendar.MINUTE, minute);
+            calendar.set(Calendar.SECOND, 0);
+            calendar.set(Calendar.MILLISECOND, 0);
+            deadlineInput.setText(deadlineFormat().format(calendar.getTime()));
+            deadlineInput.setError(null);
+            updateAlarmButton();
+        }, calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE), true).show();
+    }
+
+    private Calendar calendarFromDeadlineText() {
+        Calendar calendar = Calendar.getInstance();
+        calendar.add(Calendar.HOUR_OF_DAY, 1);
+        calendar.set(Calendar.SECOND, 0);
+        calendar.set(Calendar.MILLISECOND, 0);
+        String deadline = StringUtils.trim(deadlineInput.getText().toString());
+        if (!deadline.isEmpty()) {
+            try {
+                Date date = deadlineFormat().parse(deadline);
+                if (date != null) {
+                    calendar.setTime(date);
+                    return calendar;
+                }
+            } catch (ParseException ignored) {
+                // Fall back to planned date plus the next convenient hour.
+            }
+        }
+        String planned = StringUtils.trim(plannedDateInput.getText().toString());
+        try {
+            Date date = dateFormat().parse(planned);
+            if (date != null) {
+                Calendar plannedCalendar = Calendar.getInstance();
+                plannedCalendar.setTime(date);
+                calendar.set(Calendar.YEAR, plannedCalendar.get(Calendar.YEAR));
+                calendar.set(Calendar.MONTH, plannedCalendar.get(Calendar.MONTH));
+                calendar.set(Calendar.DAY_OF_MONTH, plannedCalendar.get(Calendar.DAY_OF_MONTH));
+            }
+        } catch (ParseException ignored) {
+            // Keep the default fallback when planned date is invalid.
+        }
+        return calendar;
+    }
+
+    private Calendar calendarFromDateText(String text) {
+        Calendar calendar = Calendar.getInstance();
+        if (text.isEmpty()) {
+            return calendar;
+        }
+        try {
+            Date date = dateFormat().parse(text);
+            if (date != null) {
+                calendar.setTime(date);
+            }
+        } catch (ParseException ignored) {
+            // Invalid manual values still open the picker on today.
+        }
+        return calendar;
+    }
+
+    private SimpleDateFormat dateFormat() {
+        return new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
+    }
     private boolean validate() {
         clearErrors();
         boolean ok = true;
