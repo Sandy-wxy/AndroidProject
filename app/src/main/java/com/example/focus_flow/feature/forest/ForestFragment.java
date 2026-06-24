@@ -17,6 +17,8 @@ import com.example.focus_flow.core.common.DateTimeUtils;
 import com.example.focus_flow.core.model.FocusSessionStatus;
 import com.example.focus_flow.data.local.model.FocusSessionRecord;
 import com.example.focus_flow.data.repository.RepositoryProvider;
+import com.example.focus_flow.domain.forest.ForestEvolutionEngine;
+import com.example.focus_flow.domain.forest.ForestState;
 import com.example.focus_flow.feature.tasks.TaskCards;
 import com.example.focus_flow.feature.tasks.TaskUi;
 import com.google.android.material.button.MaterialButton;
@@ -51,9 +53,11 @@ public class ForestFragment extends Fragment {
 
     private void render() {
         content.removeAllViews();
+        long now = System.currentTimeMillis();
         List<FocusSessionRecord> all = provider.focusSessionRepository
-                .getSessionsBetween(0, System.currentTimeMillis());
+                .getSessionsBetween(0, now);
         List<FocusSessionRecord> trees = qualifiedTrees(all);
+        ForestState forestState = new ForestEvolutionEngine().evaluate(all, now);
 
         content.addView(TaskUi.text(requireContext(), "我的专注森林", 30,
                 requireContext().getColor(R.color.text_primary),
@@ -66,7 +70,7 @@ public class ForestFragment extends Fragment {
 
         MaterialCardView forestCard = TaskUi.glassCard(requireContext());
         FocusForestView forest = new FocusForestView(requireContext());
-        forest.setTrees(trees);
+        forest.setForestState(forestState);
         forestCard.addView(forest, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, TaskUi.dp(requireContext(), 330)));
         content.addView(forestCard);
@@ -77,6 +81,7 @@ public class ForestFragment extends Fragment {
         metrics.addView(cards.metricCard("森林专注", DateTimeUtils.formatDurationShort(totalSeconds(trees))),
                 metricParams());
         content.addView(metrics);
+        addEvolutionCard(forestState);
 
         MaterialCardView ruleCard = TaskUi.glassCard(requireContext());
         LinearLayout ruleBody = TaskUi.vertical(requireContext(), 18);
@@ -113,6 +118,25 @@ public class ForestFragment extends Fragment {
                         : "今天新增 " + todayTrees + " 棵树，森林正在变得更茂盛。",
                 13, requireContext().getColor(R.color.focus_green),
                 android.graphics.Typeface.BOLD));
+    }
+
+    private void addEvolutionCard(ForestState state) {
+        MaterialCardView card = TaskUi.glassCard(requireContext());
+        LinearLayout body = TaskUi.vertical(requireContext(), 14);
+        card.addView(body);
+        android.widget.TextView level = TaskUi.text(requireContext(),
+                "Lv." + state.level.levelNumber + "  " + state.level.sceneName,
+                18, requireContext().getColor(R.color.text_primary), android.graphics.Typeface.BOLD);
+        level.setId(R.id.forest_evolution_level);
+        body.addView(level);
+        int remaining = Math.max(0, state.nextLevelTreeTarget - state.trees.size());
+        body.addView(TaskUi.text(requireContext(),
+                "连续学习 " + state.streakDays + " 天 · 距离下一场景还需要 " + remaining + " 棵树",
+                13, requireContext().getColor(R.color.text_secondary), android.graphics.Typeface.NORMAL));
+        body.addView(TaskUi.text(requireContext(),
+                "数学、语言、编程等科目会长出不同树种；45 分钟和 90 分钟以上会成长为更高大的树。",
+                12, requireContext().getColor(R.color.text_weak), android.graphics.Typeface.NORMAL));
+        content.addView(card);
     }
 
     private List<FocusSessionRecord> qualifiedTrees(List<FocusSessionRecord> sessions) {

@@ -1,18 +1,23 @@
 package com.example.focus_flow.feature.home;
 
 import android.app.AlertDialog;
+import android.app.DatePickerDialog;
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.widget.AppCompatImageButton;
+import androidx.appcompat.widget.PopupMenu;
 import androidx.fragment.app.Fragment;
 import androidx.navigation.fragment.NavHostFragment;
 
@@ -27,6 +32,11 @@ import com.example.focus_flow.data.local.model.FocusBlockRecord;
 import com.example.focus_flow.data.local.model.FocusSessionRecord;
 import com.example.focus_flow.data.local.model.TaskRecord;
 import com.example.focus_flow.data.repository.RepositoryProvider;
+import com.example.focus_flow.domain.assistant.AiPromptBuilder;
+import com.example.focus_flow.domain.assistant.AiResponseParser;
+import com.example.focus_flow.domain.assistant.AssistantSuggestion;
+import com.example.focus_flow.domain.assistant.StudyStrategyEngine;
+import com.example.focus_flow.domain.assistant.SuggestionQueue;
 import com.example.focus_flow.domain.rules.Advice;
 import com.example.focus_flow.domain.rules.AdviceEngine;
 import com.example.focus_flow.domain.rules.Recommendation;
@@ -34,6 +44,8 @@ import com.example.focus_flow.domain.rules.TaskSplitEngine;
 import com.example.focus_flow.domain.stats.RecentStats;
 import com.example.focus_flow.domain.stats.StatsCalculator;
 import com.example.focus_flow.domain.stats.SummaryStats;
+import com.example.focus_flow.feature.assistant.AiProxyClient;
+import com.example.focus_flow.feature.assistant.AiUiTransitions;
 import com.example.focus_flow.feature.tasks.TaskCards;
 import com.example.focus_flow.feature.tasks.TaskFormBottomSheet;
 import com.example.focus_flow.feature.tasks.TaskUi;
@@ -45,14 +57,24 @@ import com.google.android.material.card.MaterialCardView;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 public class HomeFragment extends Fragment {
     private LinearLayout content;
     private RepositoryProvider provider;
     private DateSwipeScrollView scrollView;
     private long selectedDate = DateTimeUtils.startOfDayMillis(System.currentTimeMillis());
+    private final Handler aiHandler = new Handler(Looper.getMainLooper());
+    private final AiResponseParser aiResponseParser = new AiResponseParser();
+    private final AiProxyClient aiProxyClient = new AiProxyClient();
+    private SuggestionQueue adviceQueue;
+    private TextView adviceTitleView;
+    private TextView adviceBodyView;
+    private Runnable adviceRotator;
 
     @Nullable
     @Override
@@ -77,11 +99,18 @@ public class HomeFragment extends Fragment {
         }
     }
 
+    @Override
+    public void onDestroyView() {
+        stopAdviceRotation();
+        super.onDestroyView();
+    }
+
     private void render() {
         provider.taskRepository.refresh();
         provider.focusSessionRepository.refresh();
         provider.noiseMixRepository.refresh();
         FocusQuickWidgetProvider.refreshAll(requireContext());
+        stopAdviceRotation();
         content.removeAllViews();
         List<TaskRecord> selectedTasks = provider.taskRepository.getTasksForDate(
                 DateTimeUtils.formatDate(selectedDate));
@@ -99,6 +128,13 @@ public class HomeFragment extends Fragment {
         metrics.addView(cards.metricCard("完成番茄钟", String.valueOf(summary.completedCount)), metricParams());
         metrics.addView(cards.metricCard("连续学习", "0 天"), metricParams());
         content.addView(metrics);
+
+        content.addView(TaskUi.spacer(requireContext(), 12));
+        MaterialButton statsButton = TaskUi.button(requireContext(), "查看统计", false);
+        statsButton.setId(R.id.home_button_stats);
+        statsButton.setOnClickListener(v -> NavHostFragment.findNavController(this).navigate(R.id.statsFragment));
+        content.addView(statsButton, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         content.addView(TaskUi.spacer(requireContext(), 12));
         MaterialButton add = TaskUi.button(requireContext(),
@@ -122,20 +158,50 @@ public class HomeFragment extends Fragment {
                 requireContext().getColor(R.color.text_secondary), android.graphics.Typeface.NORMAL));
         row.addView(titleBlock, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
 
-        AppCompatImageButton settings = TaskUi.iconButton(requireContext(), R.drawable.ic_nav_settings);
-        settings.setId(R.id.home_button_settings);
-        settings.setContentDescription("设置");
-        settings.setOnClickListener(v -> startActivity(new Intent(requireContext(), SettingsActivity.class)));
+        AppCompatImageButton more = TaskUi.iconButton(requireContext(), R.drawable.ic_nav_profile);
+        more.setId(R.id.home_button_settings);
+        more.setContentDescription("更多");
+        more.setOnClickListener(this::showHomeMenu);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 TaskUi.dp(requireContext(), 52), TaskUi.dp(requireContext(), 52));
         params.setMarginStart(TaskUi.dp(requireContext(), 12));
-        row.addView(settings, params);
+        row.addView(more, params);
         content.addView(row);
         addDateNavigator();
     }
 
+    private void showHomeMenu(View anchor) {
+        PopupMenu menu = new PopupMenu(requireContext(), anchor);
+        menu.getMenu().add("我的");
+        menu.getMenu().add("学习报告");
+        menu.getMenu().add("设置");
+        menu.setOnMenuItemClickListener(item -> {
+            String title = String.valueOf(item.getTitle());
+            if ("我的".equals(title)) {
+                NavHostFragment.findNavController(this).navigate(R.id.profileFragment);
+                return true;
+            }
+            if ("学习报告".equals(title)) {
+                NavHostFragment.findNavController(this).navigate(R.id.statsFragment);
+                return true;
+            }
+            if ("设置".equals(title)) {
+                startActivity(new Intent(requireContext(), SettingsActivity.class));
+                return true;
+            }
+            return false;
+        });
+        menu.show();
+    }
+
     private void addDateNavigator() {
         content.addView(TaskUi.spacer(requireContext(), 12));
+        MaterialButton pickDate = TaskUi.button(requireContext(), "\u9009\u62e9\u65e5\u671f", false);
+        pickDate.setId(R.id.home_button_pick_date);
+        pickDate.setOnClickListener(v -> showDatePicker());
+        content.addView(pickDate, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        content.addView(TaskUi.spacer(requireContext(), 8));
         LinearLayout navigator = TaskUi.horizontal(requireContext());
         MaterialButton previous = TaskUi.button(requireContext(), "‹ 前一天", false);
         previous.setId(R.id.home_button_previous_day);
@@ -161,6 +227,9 @@ public class HomeFragment extends Fragment {
         StatsCalculator calculator = new StatsCalculator();
         List<FocusSessionRecord> sessions = provider.focusSessionRepository.getRecentSessions(20);
         RecentStats stats = calculator.calculateRecentStats(sessions, System.currentTimeMillis());
+        if (addHybridAdviceCards(tasks, sessions, stats)) {
+            return;
+        }
         List<Advice> advices = new AdviceEngine().generate(stats, tasks, sessions, System.currentTimeMillis(), true);
         content.addView(TaskUi.text(requireContext(), "智能建议", 18,
                 requireContext().getColor(R.color.text_primary), android.graphics.Typeface.BOLD));
@@ -171,6 +240,164 @@ public class HomeFragment extends Fragment {
                 content.addView(smallCard(advice.title, advice.content));
             }
         }
+    }
+
+    private boolean addHybridAdviceCards(List<TaskRecord> tasks, List<FocusSessionRecord> sessions,
+                                         RecentStats stats) {
+        List<AssistantSuggestion> local = localStudySuggestions(stats, tasks, sessions);
+        adviceQueue = new SuggestionQueue(local);
+
+        content.addView(TaskUi.text(requireContext(), "智能建议", 18,
+                requireContext().getColor(R.color.text_primary), android.graphics.Typeface.BOLD));
+        MaterialCardView card = TaskUi.glassCard(requireContext());
+        LinearLayout body = TaskUi.vertical(requireContext(), 16);
+        card.addView(body);
+        adviceTitleView = TaskUi.text(requireContext(), "", 16,
+                requireContext().getColor(R.color.text_primary), android.graphics.Typeface.BOLD);
+        adviceBodyView = TaskUi.text(requireContext(), "", 13,
+                requireContext().getColor(R.color.text_secondary), android.graphics.Typeface.NORMAL);
+        body.addView(adviceTitleView);
+        body.addView(adviceBodyView);
+        content.addView(card);
+
+        renderAdviceSuggestion(adviceQueue.current(), false);
+        scheduleAdviceRotation();
+        requestApiStudyAdvice(tasks, stats);
+        return true;
+    }
+
+    private List<AssistantSuggestion> localStudySuggestions(RecentStats stats, List<TaskRecord> tasks,
+                                                            List<FocusSessionRecord> sessions) {
+        List<AssistantSuggestion> result = new ArrayList<>();
+        List<Advice> advices = new AdviceEngine().generate(stats, tasks, sessions, System.currentTimeMillis(), true);
+        for (Advice advice : advices) {
+            result.add(AssistantSuggestion.local(advice.adviceId, AssistantSuggestion.Category.STUDY_PLAN,
+                    advice.title, advice.content));
+        }
+        StudyStrategyEngine.Context context = new StudyStrategyEngine.Context();
+        context.nowMillis = System.currentTimeMillis();
+        context.completionRate = stats.completionRate;
+        context.averageQuality = stats.averageQuality;
+        context.bestSegment = stats.currentTimeSegment;
+        context.currentSegment = com.example.focus_flow.core.model.TimeSegment.fromMillis(System.currentTimeMillis());
+        context.tasks = tasks;
+        result.addAll(new StudyStrategyEngine().generate(context));
+        if (result.isEmpty()) {
+            result.add(AssistantSuggestion.local("study-default", AssistantSuggestion.Category.STUDY_PLAN,
+                    "先创建一个清晰任务", "写下可检查的完成结果，系统会在几次专注后给出更贴合的建议。"));
+        }
+        return result;
+    }
+
+    private void requestApiStudyAdvice(List<TaskRecord> tasks, RecentStats stats) {
+        AiPromptBuilder.TaskAdviceContext context = new AiPromptBuilder.TaskAdviceContext();
+        context.todayTaskCount = tasks == null ? 0 : tasks.size();
+        context.urgentTaskCount = countUrgent(tasks);
+        context.hardTaskCount = countHard(tasks);
+        context.completionRate = stats.completionRate;
+        context.averageQuality = stats.averageQuality;
+        context.bestSegment = stats.currentTimeSegment;
+        context.topSubjects = topSubjects(tasks);
+        String prompt = new AiPromptBuilder().buildTaskAdvicePrompt(context);
+        aiProxyClient.chat(prompt, new AiProxyClient.Callback() {
+            @Override
+            public void onSuccess(String responseBody) {
+                if (!isAdded() || adviceQueue == null) {
+                    return;
+                }
+                List<AssistantSuggestion> api = aiResponseParser.parseSuggestions(
+                        responseBody, AssistantSuggestion.Category.STUDY_PLAN);
+                if (api.isEmpty()) {
+                    return;
+                }
+                adviceQueue.mergeApiSuggestions(api);
+                adviceQueue.moveTo(api.get(0));
+                renderAdviceSuggestion(adviceQueue.current(), true);
+                scheduleAdviceRotation();
+            }
+
+            @Override
+            public void onError(Exception error) {
+                // The local queue remains active when the proxy times out or fails.
+            }
+        });
+    }
+
+    private void renderAdviceSuggestion(AssistantSuggestion suggestion, boolean animate) {
+        if (suggestion == null || adviceTitleView == null || adviceBodyView == null) {
+            return;
+        }
+        AiUiTransitions.crossFadeText(adviceTitleView, suggestion.title,
+                adviceBodyView, suggestion.content, animate);
+    }
+
+    private void scheduleAdviceRotation() {
+        if (adviceQueue == null || adviceQueue.items().size() <= 1) {
+            return;
+        }
+        if (adviceRotator != null) {
+            aiHandler.removeCallbacks(adviceRotator);
+        }
+        adviceRotator = () -> {
+            if (!isAdded() || adviceQueue == null || adviceQueue.items().isEmpty()) {
+                return;
+            }
+            AssistantSuggestion next = adviceQueue.next();
+            renderAdviceSuggestion(next, true);
+            aiHandler.postDelayed(adviceRotator, delayFor(next));
+        };
+        aiHandler.postDelayed(adviceRotator, delayFor(adviceQueue.current()));
+    }
+
+    private void stopAdviceRotation() {
+        if (adviceRotator != null) {
+            aiHandler.removeCallbacks(adviceRotator);
+        }
+        adviceRotator = null;
+    }
+
+    private long delayFor(AssistantSuggestion suggestion) {
+        int length = suggestion == null ? 40 : suggestion.content.length() + suggestion.title.length();
+        return Math.max(4500L, Math.min(9000L, length * 85L));
+    }
+
+    private int countUrgent(List<TaskRecord> tasks) {
+        int count = 0;
+        if (tasks == null) return 0;
+        for (TaskRecord task : tasks) {
+            if (task.priority != null && task.priority.rank() >= 3) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private int countHard(List<TaskRecord> tasks) {
+        int count = 0;
+        if (tasks == null) return 0;
+        for (TaskRecord task : tasks) {
+            if (task.difficulty != null && task.difficulty.ordinal() >= 2) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private List<String> topSubjects(List<TaskRecord> tasks) {
+        Map<String, Integer> counts = new HashMap<>();
+        if (tasks != null) {
+            for (TaskRecord task : tasks) {
+                String subject = task.subject == null || task.subject.trim().isEmpty() ? "study" : task.subject.trim();
+                counts.put(subject, counts.containsKey(subject) ? counts.get(subject) + 1 : 1);
+            }
+        }
+        List<Map.Entry<String, Integer>> entries = new ArrayList<>(counts.entrySet());
+        entries.sort((left, right) -> Integer.compare(right.getValue(), left.getValue()));
+        List<String> result = new ArrayList<>();
+        for (int i = 0; i < Math.min(3, entries.size()); i++) {
+            result.add(entries.get(i).getKey());
+        }
+        return result;
     }
 
     private void addTaskSection(List<TaskRecord> tasks, TaskCards cards) {
@@ -319,6 +546,19 @@ public class HomeFragment extends Fragment {
         provider.taskRepository.insertTask(copy, blocks);
     }
 
+    private void showDatePicker() {
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTimeInMillis(selectedDate);
+        new DatePickerDialog(requireContext(), (picker, year, month, day) -> {
+            Calendar target = Calendar.getInstance();
+            target.set(year, month, day, 0, 0, 0);
+            target.set(Calendar.MILLISECOND, 0);
+            selectedDate = DateTimeUtils.startOfDayMillis(target.getTimeInMillis());
+            render();
+            scrollView.post(() -> scrollView.scrollTo(0, 0));
+        }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH),
+                calendar.get(Calendar.DAY_OF_MONTH)).show();
+    }
     private void shiftSelectedDate(int days) {
         Calendar calendar = Calendar.getInstance();
         calendar.setTimeInMillis(selectedDate);

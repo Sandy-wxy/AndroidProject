@@ -2,9 +2,12 @@ package com.example.focus_flow;
 
 import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.action.ViewActions.click;
+import static androidx.test.espresso.action.ViewActions.scrollTo;
 import static androidx.test.espresso.assertion.ViewAssertions.matches;
 import static androidx.test.espresso.matcher.ViewMatchers.isDisplayed;
 import static androidx.test.espresso.matcher.ViewMatchers.withId;
+import static androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom;
+import static androidx.test.espresso.matcher.ViewMatchers.withContentDescription;
 import static androidx.test.espresso.matcher.ViewMatchers.withText;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -92,13 +95,17 @@ public class NoiseAndSettingsInstrumentedTest {
     public void noiseAndSettingsUiSaveCustomMixAndToggleAutoStop() {
         Context targetContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
         RepositoryProvider provider = RepositoryProvider.get(targetContext);
-        Intent intent = new Intent(targetContext, MainActivity.class)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-        activity = InstrumentationRegistry.getInstrumentation().startActivitySync(intent);
-        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+        activity = TestActivityLauncher.launchMainActivity();
 
         int before = provider.noiseMixRepository.getAllMixes().size();
-        onView(withId(R.id.nav_noise)).perform(click());
+        onView(withId(R.id.nav_focus)).perform(click());
+        onView(withText("白噪音控制台")).perform(scrollTo(), click());
+        onView(withId(R.id.noise_button_back_home)).check(matches(isDisplayed()));
+        onView(withId(R.id.noise_button_back_home)).check(matches(withContentDescription("返回")));
+        onView(withId(R.id.noise_button_back_home)).check(matches(isAssignableFrom(androidx.appcompat.widget.AppCompatImageButton.class)));
+        onView(withId(R.id.noise_smart_suggestions)).check(matches(isDisplayed()));
+        onView(withId(R.id.noise_smart_apply_1)).perform(click());
+        assertTrue(NoisePlaybackController.get().isPlaying());
         onView(withText("白噪音控制台")).check(matches(isDisplayed()));
         onView(withId(R.id.noise_button_play_current)).perform(click());
         assertTrue(NoisePlaybackController.get().isPlaying());
@@ -109,6 +116,7 @@ public class NoiseAndSettingsInstrumentedTest {
 
         onView(withId(R.id.nav_home)).perform(click());
         onView(withId(R.id.home_button_settings)).perform(click());
+        onView(withText("设置")).perform(click());
         onView(withId(R.id.settings_auto_stop_switch)).check(matches(isDisplayed()));
         assertTrue(provider.settingsRepository.isAutoStopNoiseEnabled());
         onView(withId(R.id.settings_auto_stop_switch)).perform(click());

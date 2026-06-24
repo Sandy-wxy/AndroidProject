@@ -68,19 +68,16 @@ public class StatsInstrumentedTest {
 
     @Test
     public void statsDashboardRendersChartsAndPeriodSwitches() {
-        Context targetContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
-        Intent intent = new Intent(targetContext, MainActivity.class)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-        activity = InstrumentationRegistry.getInstrumentation().startActivitySync(intent);
-        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+        activity = TestActivityLauncher.launchMainActivity();
 
-        onView(withId(R.id.nav_stats)).perform(click());
+        onView(withText("查看统计")).perform(click());
         onView(withText("专注统计")).check(matches(isDisplayed()));
         onView(withId(R.id.stats_filter_today)).check(matches(isDisplayed()));
         onView(withId(R.id.stats_filter_week)).check(matches(isDisplayed()));
         onView(withId(R.id.stats_filter_month)).check(matches(isDisplayed()));
         onView(withId(R.id.stats_trend_chart)).check(matches(isDisplayed()));
         onView(withId(R.id.stats_subject_chart)).check(matches(isDisplayed()));
+        onView(withId(R.id.stats_ai_analysis_card)).perform(scrollTo()).check(matches(isDisplayed()));
         onView(withText("高效时段洞察")).perform(scrollTo()).check(matches(isDisplayed()));
         onView(withText("最常用白噪音")).perform(scrollTo()).check(matches(isDisplayed()));
 

@@ -2,6 +2,7 @@ package com.example.focus_flow;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.view.View;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
@@ -17,7 +18,6 @@ import androidx.fragment.app.Fragment;
 import com.example.focus_flow.databinding.ActivityMainBinding;
 import com.example.focus_flow.data.repository.RepositoryProvider;
 import com.example.focus_flow.feature.widget.FocusQuickWidgetProvider;
-import com.google.android.material.textview.MaterialTextView;
 
 public class MainActivity extends AppCompatActivity {
     public static final String EXTRA_OPEN_FOCUS = "open_focus";
@@ -49,8 +49,11 @@ public class MainActivity extends AppCompatActivity {
         navController = navHostFragment.getNavController();
         appBarConfiguration = new AppBarConfiguration.Builder(
                 R.id.homeFragment,
+                R.id.tasksFragment,
                 R.id.focusFragment,
                 R.id.forestFragment,
+                R.id.noiseFragment,
+                R.id.statsFragment,
                 R.id.profileFragment
         ).build();
         bindBottomNav(navController);
@@ -110,16 +113,16 @@ public class MainActivity extends AppCompatActivity {
 
     private void bindBottomNav(NavController navController) {
         bindNavItem(binding.navHome, navController, R.id.homeFragment);
+        bindNavItem(binding.navTasks, navController, R.id.tasksFragment);
         bindNavItem(binding.navFocus, navController, R.id.focusFragment);
         bindNavItem(binding.navForest, navController, R.id.forestFragment);
-        bindNavItem(binding.navProfile, navController, R.id.profileFragment);
         navController.addOnDestinationChangedListener((controller, destination, arguments) -> updateBottomNav(destination.getId()));
         updateBottomNav(navController.getCurrentDestination() == null
                 ? R.id.homeFragment
                 : navController.getCurrentDestination().getId());
     }
 
-    private void bindNavItem(MaterialTextView item, NavController navController, int destinationId) {
+    private void bindNavItem(View item, NavController navController, int destinationId) {
         item.setOnClickListener(v -> {
             if (navController.getCurrentDestination() == null
                     || navController.getCurrentDestination().getId() != destinationId) {
@@ -130,9 +133,9 @@ public class MainActivity extends AppCompatActivity {
 
     private void updateBottomNav(int destinationId) {
         binding.navHome.setSelected(destinationId == R.id.homeFragment);
+        binding.navTasks.setSelected(destinationId == R.id.tasksFragment);
         binding.navFocus.setSelected(destinationId == R.id.focusFragment);
         binding.navForest.setSelected(destinationId == R.id.forestFragment);
-        binding.navProfile.setSelected(destinationId == R.id.profileFragment);
     }
 
     @Override

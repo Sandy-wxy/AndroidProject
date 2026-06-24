@@ -21,6 +21,7 @@ import androidx.annotation.Nullable;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.fragment.app.Fragment;
+import androidx.navigation.fragment.NavHostFragment;
 
 import com.example.focus_flow.R;
 import com.example.focus_flow.SettingsActivity;
@@ -105,6 +106,7 @@ public class ProfileFragment extends Fragment {
         provider.taskRepository.refresh();
         provider.focusSessionRepository.refresh();
         content.removeAllViews();
+        addBackHomeButton();
         if (!account.isLoggedIn()) {
             renderLogin();
             return;
@@ -113,6 +115,18 @@ public class ProfileFragment extends Fragment {
         renderProfile();
     }
 
+    private void addBackHomeButton() {
+        content.addView(TaskUi.backHeader(requireContext(), R.id.profile_button_back_home,
+                "我的", "个人数据、年度贡献和资料管理", v -> navigateBack()));
+        content.addView(TaskUi.spacer(requireContext(), 16));
+    }
+
+    private void navigateBack() {
+        androidx.navigation.NavController navController = NavHostFragment.findNavController(this);
+        if (!navController.navigateUp()) {
+            navController.navigate(R.id.homeFragment);
+        }
+    }
     private void renderLogin() {
         content.addView(TaskUi.text(requireContext(), "欢迎回来", 30,
                 requireContext().getColor(R.color.text_primary), android.graphics.Typeface.BOLD));

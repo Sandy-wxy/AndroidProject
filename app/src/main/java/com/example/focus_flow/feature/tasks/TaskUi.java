@@ -66,6 +66,28 @@ public final class TaskUi {
         return layout;
     }
 
+    public static LinearLayout backHeader(Context context, int backButtonId, String title,
+                                          String subtitle, View.OnClickListener onClickListener) {
+        LinearLayout row = horizontal(context);
+        AppCompatImageButton back = iconButton(context, R.drawable.ic_arrow_back);
+        back.setId(backButtonId);
+        back.setContentDescription("返回");
+        back.setOnClickListener(onClickListener);
+        row.addView(back, new LinearLayout.LayoutParams(dp(context, 52), dp(context, 52)));
+
+        LinearLayout titleBlock = vertical(context, 0);
+        titleBlock.addView(text(context, title, 30,
+                context.getColor(R.color.text_primary), Typeface.BOLD));
+        if (subtitle != null && !subtitle.trim().isEmpty()) {
+            titleBlock.addView(text(context, subtitle, 14,
+                    context.getColor(R.color.text_secondary), Typeface.NORMAL));
+        }
+        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
+        titleParams.setMarginStart(dp(context, 14));
+        row.addView(titleBlock, titleParams);
+        return row;
+    }
     public static MaterialButton button(Context context, String text, boolean filled) {
         MaterialButton button = new MaterialButton(context);
         button.setText(text);

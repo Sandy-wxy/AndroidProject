@@ -98,7 +98,10 @@ public class TaskCards {
         MaterialButton start = TaskUi.button(context, "开始", true);
         MaterialButton edit = TaskUi.button(context, "编辑", false);
         MaterialButton more = TaskUi.button(context, "更多", false);
+        MaterialButton complete = TaskUi.button(context, "完成", true);
+        complete.setId(R.id.task_button_complete);
         actionsRow.addView(start, weighted());
+        actionsRow.addView(complete, weightedWithStartMargin());
         actionsRow.addView(edit, weightedWithStartMargin());
         actionsRow.addView(more, weightedWithStartMargin());
         body.addView(TaskUi.spacer(context, 10));
@@ -113,7 +116,9 @@ public class TaskCards {
         }
 
         start.setEnabled(task.status != TaskStatus.COMPLETED && task.status != TaskStatus.ARCHIVED);
+        complete.setEnabled(task.status != TaskStatus.COMPLETED && task.status != TaskStatus.ARCHIVED);
         start.setOnClickListener(v -> actions.onStart(task));
+        complete.setOnClickListener(v -> actions.onComplete(task));
         edit.setOnClickListener(v -> actions.onEdit(task));
         more.setOnClickListener(v -> {
             PopupMenu menu = new PopupMenu(context, more);

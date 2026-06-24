@@ -5,6 +5,11 @@
     <item name="home_button_previous_day" type="id" />
     <item name="home_button_next_day" type="id" />
     <item name="home_button_back_today" type="id" />
+    <item name="home_button_pick_date" type="id" />
+    <item name="home_button_stats" type="id" />
+    <item name="nav_noise" type="id" />
+    <item name="nav_stats" type="id" />
+    <item name="nav_profile" type="id" />
     <item name="settings_container" type="id" />
     <item name="settings_button_back" type="id" />
     <item name="tasks_button_add_task" type="id" />
@@ -21,13 +26,20 @@
     <item name="task_spinner_priority" type="id" />
     <item name="task_spinner_color" type="id" />
     <item name="task_switch_auto_split" type="id" />
+    <item name="task_button_advanced_toggle" type="id" />
     <item name="task_button_save" type="id" />
     <item name="task_button_save_start" type="id" />
+    <item name="task_button_complete" type="id" />
+    <item name="task_rewrite_container" type="id" />
+    <item name="task_rewrite_suggestion_1" type="id" />
+    <item name="task_rewrite_suggestion_2" type="id" />
+    <item name="task_rewrite_suggestion_3" type="id" />
     <item name="focus_button_pause_resume" type="id" />
     <item name="focus_button_finish_early" type="id" />
     <item name="focus_button_continue_next" type="id" />
     <item name="focus_button_back_home" type="id" />
     <item name="focus_button_go_tasks" type="id" />
+    <item name="focus_button_noise_console" type="id" />
     <item name="focus_rating_1" type="id" />
     <item name="focus_rating_2" type="id" />
     <item name="focus_rating_3" type="id" />
@@ -36,10 +48,13 @@
     <item name="focus_distraction_spinner" type="id" />
     <item name="focus_reflection_input" type="id" />
     <item name="focus_button_save_rating" type="id" />
+    <item name="noise_button_back_home" type="id" />
     <item name="noise_button_play_current" type="id" />
     <item name="noise_button_stop" type="id" />
     <item name="noise_button_save_custom" type="id" />
     <item name="noise_master_volume" type="id" />
+    <item name="noise_smart_suggestions" type="id" />
+    <item name="noise_smart_apply_1" type="id" />
     <item name="settings_theme_spinner" type="id" />
     <item name="settings_notification_switch" type="id" />
     <item name="settings_auto_stop_switch" type="id" />
@@ -59,6 +74,10 @@
     <item name="stats_filter_month" type="id" />
     <item name="stats_trend_chart" type="id" />
     <item name="stats_subject_chart" type="id" />
+    <item name="stats_ai_analysis_card" type="id" />
+    <item name="stats_button_back_home" type="id" />
+    <item name="forest_evolution_level" type="id" />
+    <item name="profile_button_back_home" type="id" />
     <item name="profile_input_name" type="id" />
     <item name="profile_input_email" type="id" />
     <item name="profile_input_password" type="id" />

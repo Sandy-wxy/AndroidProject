@@ -25,6 +25,10 @@
         android:name="com.example.focus_flow.feature.noise.NoiseFragment"
         android:label="@string/nav_noise" />
     <fragment
+        android:id="@+id/statsFragment"
+        android:name="com.example.focus_flow.feature.stats.StatsFragment"
+        android:label="@string/nav_stats" />
+    <fragment
         android:id="@+id/profileFragment"
         android:name="com.example.focus_flow.feature.profile.ProfileFragment"
         android:label="@string/nav_profile" />
